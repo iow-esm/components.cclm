@@ -1,0 +1,4198 @@
+Only in cclm-sp_2.0/src/cclm: bin
+Only in cclm-sp_2.0/src/cclm: DOCS
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/Fopts cclm/Fopts
+--- cclm-sp_2.0/src/cclm/Fopts	2015-09-21 16:13:47.000000000 +0200
++++ cclm/Fopts	2023-07-25 16:08:58.323164000 +0200
+@@ -1,60 +1,32 @@
+-#
+-#  preliminary recommendation for CCLM compiler options on MISTRAL
+-#  H.-J. Panitz, IMK-TRO/KIT, 2015-07-29
+-#  change compiler, options and libraries according to your needs
+-#
+ #########
+-#  Mistral (DKRZ) / Intel Compiler
++#  
++# IOW Earth System Model 
++#  
+ #########
+ #
+-# modules and libraries
++# define OASIS3-MCT paths 
++#
++OASIS3_LIB =  ${IOW_ESM_ROOT}/components/OASIS3-MCT/oasis3-mct/IOW_ESM_${IOW_ESM_COMPILE_MODE}
++OASIS3_INC = -I${OASIS3_LIB}/build/lib/mct -I${OASIS3_LIB}/build/lib/psmile.MPI1
++#
++# define fortran compiler command
++#
++F90          = 	${IOW_ESM_FC} -c -fpp  \
++                -I ${SRCDIR} \
++                -DNETCDF \
++                -DCLM \
++                -I ${OASIS3_LIB}/build/lib/psmile.MPI1 \
++                -I ${OASIS3_LIB}/build/lib/mct \
++                -I ${IOW_ESM_NETCDF_INCLUDE} \
++                
++# loader call
++LDPAR = ${IOW_ESM_LD}
++LDSEQ = ${IOW_ESM_LD}
++#
++PROGRAM      = bin_${IOW_ESM_COMPILE_MODE}/lmparbin
++#
++# compile-flags
++#
++COMFLG       = ${IOW_ESM_FFLAGS}
+ #
+-
+-#... MPI
+-MPI_INC  = 
+-MPI_LIB  =
+-
+-#... netCDF
+-NETCDFC_ROOT = /sw/rhel6-x64/netcdf/netcdf_c-4.3.2-gcc48
+-NETCDFF_ROOT = /sw/rhel6-x64/netcdf/netcdf_fortran-4.4.2-intel14
+-HDF5_ROOT = /sw/rhel6-x64/hdf5/hdf5-1.8.14-threadsafe-gcc48
+-SZIP_ROOT = /sw/rhel6-x64/sys/libaec-0.3.2-gcc48
+-#
+-NC_INC  = -I${NETCDFF_ROOT}/include
+-NC_LIB  =  -L${NETCDFC_ROOT}/lib -lnetcdff
+-NC_LIB  += -L${NETCDFF_ROOT}/lib -lnetcdf
+-NC_LIB  += -L${HDF5_ROOT}/lib -lhdf5_hl -lhdf5 -lz
+-NC_LIB  += -L$(SZIP_ROOT)/lib -lsz -lm
+-#
+-
+-#... GRIB
+-#
+-# The  GRIB Library is not part of the starter package
+-#
+-GRIB_LIB= 
+-
+-#
+-# name and path of standard binary to be produced
+-PROGRAM      = bin/cclm.exe
+-#
+-
+-#... other libs, if needed on the computer system (e.g. mathematical packages)
+-OTHLIBS1=
+-#
+-# compiler, options and libraries
+-#
+-# important note wiith respect to the compiler
+-# I recommend to use the BULL MPI environmet. For this the nake of the compiler is "mpif90"
+-# If you want to use the INTEL MPI environment, then you have to change the name to "mpiifort"
+-# 
+-F90          = mpif90
+-
+-# if you want to use GRIB you have to at -DGRIB to the CPPFLAGS and 
+-#          define the GRIBLIB library above
+-CPPFLAGS     = -DNETCDF -DCLM 
+-
+-#
+-# for purposes of first tests you may use in addition to the option below the options -fpe0 -traceback
+-COMFLG = -c -cpp -Os -no-vec -fp-model source $(CPPFLAGS) $(MPI_INC) ${NC_INC} -I$(SRCDIR) 
+-
+ COMFLG1      = $(COMFLG)
+@@ -63,12 +35,15 @@
+ #
+-# Compile src_setup_vartab.f90 with optimization level -O0; speeds up the compilation very much!!
+-# for pruposes of first tests I recommend to use in addition to the option below the optiopn -fpe0 -traceback
++# link-flags
++#
++LDFLG        = ${IOW_ESM_LDFLAGS}
++#
++# Archive maintainer
++AR          = ar
+ #
+-COMFLG4       = -c -cpp -O0 -no-vec -fp-model source $(CPPFLAGS) $(MPI_INC) ${NC_INC} -I$(SRCDIR)
+-
++# library path
+ #
+-LDSEQ        = ${F90}
+-LDPAR        = ${F90}
+-LDFLG        = -I$(SRCDIR)
+-LIB          = ${GRIB_LIB} ${NC_LIB} ${MPI_LIB} ${OTHLIBS1}
+-LIB         += -Wl,-rpath,$(NETCDFF_ROOT)/lib:$(NETCDFC_ROOT)/lib:$(HDF5_ROOT)/lib:$(SZIP_ROOT)/lib
++LIB          = -L${IOW_ESM_NETCDF_LIBRARY} -lnetcdff -lm \
++                ${OASIS3_LIB}/lib/libpsmile.MPI1.a \
++                ${OASIS3_LIB}/lib/libmct.a \
++                ${OASIS3_LIB}/lib/libmpeu.a \
++                ${OASIS3_LIB}/lib/libscrip.a 
+Only in cclm-sp_2.0/src/cclm: Fopts_tmp
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/Makefile cclm/Makefile
+--- cclm-sp_2.0/src/cclm/Makefile	2015-09-21 16:13:47.000000000 +0200
++++ cclm/Makefile	2023-07-25 16:08:58.325116700 +0200
+@@ -17,6 +17,10 @@
+ SRCDIR       = $(STDROOT)/src
+-OBJDIR       = $(STDROOT)/obj
+-WORKDIR      = $(STDROOT)/work
++OBJDIR       = $(STDROOT)/obj_${IOW_ESM_COMPILE_MODE}
++WORKDIR      = $(STDROOT)/work_${IOW_ESM_COMPILE_MODE}
+ #
+-########
++# standard binary
++PROGRAM      = bin_${IOW_ESM_COMPILE_MODE}/lmparbin
++#
++#
++#########
+ #  include file with compiler options and libraries according to your needs
+@@ -24,83 +28,53 @@
+ #
+-####################################################
+-#  include (or build) an appropriate compiler file
+-#     some compiler files are available in LOCAL
+-#     and can be copied to Fopts
+-####################################################
+-
+ include Fopts
++#
+ 
+ ####################################################
++#
+ #     Declaration of the Object Files
++#
+ ####################################################
+-
++#
+ include ObjFiles
+-
++#
++#
+ ####################################################
++#
+ #     Actions that can be performed
++#
+ ####################################################
+ #
+-exe:    allpar
++exe:    parexe
+ #
+-purpar:  check_is_not_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) 
+-	echo linking parallel program
+-	( $(LDPAR) $(LDFLG) -o $(PROGRAM)_pur $(DATAOBJ) $(UTILOBJ) $(EXTOBJ) \
+-                                    $(PUBLICUTILS) $(SRCOBJ) $(LIB) )
++$(OBJDIR):
++	mkdir -p $(OBJDIR)
+ #
+-allpar:  addmods / check_is_not_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(ASSOBJ) $(SATOBJ) $(IFSOBJ)
++parexe: $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(IFSOBJ) \
++         $(ASSOBJ) $(SATOBJ) $(OASOBJ)
+ 	echo linking parallel program
+ 	( $(LDPAR) $(LDFLG) -o $(PROGRAM) $(DATAOBJ) $(UTILOBJ) $(EXTOBJ) \
+-                                    $(PUBLICUTILS) $(SRCOBJ) $(ASSOBJ) $(SATOBJ) $(IFSOBJ) $(LIB) )
++                                    $(PUBLICUTILS) $(SRCOBJ) $(IFSOBJ) \
++                                    $(ASSOBJ) $(SATOBJ) $(OASOBJ) $(LIB) )
+ #
+-nudpar:  check_is_not_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(ASSOBJ)
++vampir:  addmods / $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(IFSOBJ)
+ 	echo linking parallel program
+-	( $(LDPAR) $(LDFLG) -o $(PROGRAM)_nud $(DATAOBJ) $(UTILOBJ) $(EXTOBJ) \
+-                                    $(PUBLICUTILS) $(SRCOBJ) $(ASSOBJ) $(LIB) )
++	( $(LDPAR) $(LDFLG) -o lmpar_vampir $(DATAOBJ) $(UTILOBJ) $(EXTOBJ) \
++                                    $(PUBLICUTILS) $(SRCOBJ) $(IFSOBJ) $(LIB)     \
++              -L/usr/local/vampir40/lib -lVT -lld  )
+ #
+-satpar:  check_is_not_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(SATOBJ)
++hpmlib:  addmods / $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(IFSOBJ)  \
++         $(ASSOBJ) $(SATOBJ) $(OASOBJ)
+ 	echo linking parallel program
+-	( $(LDPAR) $(LDFLG) -o $(PROGRAM)_sat $(DATAOBJ) $(UTILOBJ) $(EXTOBJ) \
+-                                    $(PUBLICUTILS) $(SRCOBJ) $(SATOBJ) $(LIB) )
+-#
+-###############################################################################
+-#
+-purseq:  check_is_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ)  \
+-         $(OBJDIR)/dummy_mpi.o
+-	echo linking sequential program
+-	( $(LDSEQ) $(LDFLG) -o $(PROGRAM)_purseq $(DATAOBJ) $(UTILOBJ)           \
+-              $(OBJDIR)/dummy_mpi.o $(EXTOBJ) $(PUBLICUTILS) $(SRCOBJ) $(LIB) )
+-#
+-allseq:  check_is_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ)  \
+-         $(ASSOBJ) $(SATOBJ)  $(IFSOBJ) $(OBJDIR)/dummy_mpi.o
+-	( $(LDSEQ) $(LDFLG) -o $(PROGRAM)_allseq $(DATAOBJ) $(UTILOBJ)           \
+-              $(OBJDIR)/dummy_mpi.o $(EXTOBJ) $(PUBLICUTILS) $(SRCOBJ) $(ASSOBJ) $(SATOBJ) $(LIB) )
++	( $(LDPAR) $(LDFLG) -o lmpar_hpmlib $(DATAOBJ) $(UTILOBJ) $(EXTOBJ) \
++                                    $(PUBLICUTILS) $(SRCOBJ) $(IFSOBJ) \
++                                    $(ASSOBJ) $(SATOBJ) $(OASOBJ) $(LIB)     \
++            -L/uhome/uschaett/lib/ACTC_pmtoolkit_beta/HPM_V2.2/lib      \
++            -l pmapi -l hpm -l m )
+ #
+-nudseq:  check_is_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ)  \
+-         $(ASSOBJ) $(OBJDIR)/dummy_mpi.o
++seqexe:  addmods / $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ) $(IFSOBJ) \
++         $(ASSOBJ) $(SATOBJ) $(OASOBJ) $(OBJDIR)/dummy_mpi.o
+ 	echo linking sequential program
+-	( $(LDSEQ) $(LDFLG) -o $(PROGRAM)_nudseq $(DATAOBJ) $(UTILOBJ)           \
+-              $(OBJDIR)/dummy_mpi.o $(EXTOBJ) $(PUBLICUTILS) $(SRCOBJ) $(ASSOBJ) $(LIB) )
+-#
+-satseq:  check_is_mpifh / $(OBJDIR) $(DATAOBJ) $(PUBLICUTILS) $(UTILOBJ) $(EXTOBJ) $(SRCOBJ)  \
+-         $(SATOBJ) $(OBJDIR)/dummy_mpi.o
+-	echo linking sequential program
+-	( $(LDSEQ) $(LDFLG) -o $(PROGRAM)_satseq $(DATAOBJ) $(UTILOBJ)           \
+-              $(OBJDIR)/dummy_mpi.o $(EXTOBJ) $(PUBLICUTILS) $(SRCOBJ) $(SATOBJ) $(LIB) )
+-#
+-###############################################################################
+-#
+-$(OBJDIR):
+-	mkdir -p $(OBJDIR)
+-#
+-check_is_mpifh:
+-	if [ ! -f $(SRCDIR)/mpif.h ]; then  \
+-          echo "ERROR: mpif.h is not contained in src/ !";  \
+-          exit 1;  \
+-        fi
+-#
+-check_is_not_mpifh:
+-	if [ -f $(SRCDIR)/mpif.h ]; then  \
+-          echo "ERROR: there is an mpif.h in src/ !";  \
+-          exit 1;  \
+-        fi
++	( $(LDSEQ) $(LDFLG) -o $(PROGRAM) $(DATAOBJ) $(PUBLICUTILS)         \
++         $(UTILOBJ) $(OBJDIR)/dummy_mpi.o $(EXTOBJ) $(SRCOBJ) $(IFSOBJ)     \
++         $(ASSOBJ) $(SATOBJ) $(OASOBJ) $(LIB) )
+ #
+@@ -113,9 +87,9 @@
+ 	echo cleaning up
+-	rm -f $(PROGRAM)*
++	rm -f $(PROGRAM)
+ 	rm -f $(OBJDIR)/*.o
+-	rm -f $(OBJDIR)/i.*
+ 	rm -f $(OBJDIR)/*.T
+-	rm -f $(OBJDIR)/*.L
+ 	rm -f $(OBJDIR)/*.mod
+ 	rm -f $(OBJDIR)/*.lst
++#+++++
++	rm -f $(OBJDIR)/*.L
+ #
+@@ -126,3 +100,4 @@
+ ####################################################
+-
++#
+ include ObjDependencies
++#
+Only in cclm-sp_2.0/src/cclm: obj
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/ObjDependencies cclm/ObjDependencies
+--- cclm-sp_2.0/src/cclm/ObjDependencies	2015-09-21 16:13:47.000000000 +0200
++++ cclm/ObjDependencies	2023-07-25 16:08:58.328046700 +0200
+@@ -209,4 +209,4 @@
+ $(OBJDIR)/environment.o:                     $(SRCDIR)/environment.f90        \
+-          $(OBJDIR)/data_parameters.o
+-	echo compiling environment.f90
++          $(OBJDIR)/data_parameters.o        $(OBJDIR)/oas_cos_vardef.o
++	  echo compiling environment.f90
+ 	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/environment.f90 )
+@@ -254,3 +254,3 @@
+ 	echo compiling netcdf_io.f90
+-	( cd $(OBJDIR) && $(F90) $(COMFLG) $(SRCDIR)/netcdf_io.f90 )
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/netcdf_io.f90 )
+ #
+@@ -308,2 +308,9 @@
+ 	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/vgrid_refatm_utils.f90 )
++
++$(OBJDIR)/bias_corrections.o:             $(SRCDIR)/bias_corrections.f90  \
++          $(OBJDIR)/data_parallel.o   $(OBJDIR)/data_parameters.o \
++          $(OBJDIR)/data_modelconfig.o $(OBJDIR)/environment.o \
++          $(OBJDIR)/parallel_utilities.o $(OBJDIR)/data_runcontrol.o 
++	echo compiling bias_corrections.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/bias_corrections.f90 )
+ #
+@@ -384,2 +391,3 @@
+ #
++# to be added
+ $(OBJDIR)/src_conv_ifs.o:                    $(SRCDIR)/src_conv_ifs.f90       \
+@@ -801,3 +809,4 @@
+           $(OBJDIR)/environment.o            $(OBJDIR)/meteo_utilities.o      \
+-          $(OBJDIR)/utilities.o              $(OBJDIR)/vgrid_refatm_utils.o
++          $(OBJDIR)/utilities.o              $(OBJDIR)/vgrid_refatm_utils.o   \
++          $(OBJDIR)/bias_corrections.o
+ 	echo compiling src_radiation.f90 
+@@ -1016,2 +1025,57 @@
+ #
++$(OBJDIR)/oas_cos_finalize.o:                $(SRCDIR)/oas_cos_finalize.f90   \
++          $(OBJDIR)/oas_cos_vardef.o
++	echo compiling oas_cos_finalize.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/oas_cos_finalize.f90 )
++#
++$(OBJDIR)/oas_cos_init.o:                    $(SRCDIR)/oas_cos_init.f90       \
++          $(OBJDIR)/oas_cos_vardef.o         $(OBJDIR)/oas_cos_define.o
++	echo compiling oas_cos_init.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/oas_cos_init.f90 )
++#
++$(OBJDIR)/oas_cos_rcv.o:                     $(SRCDIR)/oas_cos_rcv.f90        \
++          $(OBJDIR)/data_parameters.o        $(OBJDIR)/data_modelconfig.o     \
++          $(OBJDIR)/oas_cos_vardef.o         $(OBJDIR)/data_parallel.o
++	echo compiling oas_cos_rcv.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/oas_cos_rcv.f90 )
++#
++$(OBJDIR)/oas_cos_snd.o:                     $(SRCDIR)/oas_cos_snd.f90        \
++          $(OBJDIR)/data_parameters.o        $(OBJDIR)/data_modelconfig.o     \
++          $(OBJDIR)/oas_cos_vardef.o         $(OBJDIR)/data_parallel.o
++	echo compiling oas_cos_snd.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/oas_cos_snd.f90 )
++#
++$(OBJDIR)/oas_cos_define.o:                  $(SRCDIR)/oas_cos_define.f90     \
++          $(OBJDIR)/data_constants.o         $(OBJDIR)/data_fields.o          \
++          $(OBJDIR)/parallel_utilities.o     $(OBJDIR)/data_modelconfig.o     \
++          $(OBJDIR)/data_parallel.o          $(OBJDIR)/data_parameters.o      \
++          $(OBJDIR)/data_runcontrol.o                      \
++          $(OBJDIR)/utilities.o              $(OBJDIR)/oas_cos_vardef.o
++	echo compiling oas_cos_define.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/oas_cos_define.f90 )
++#
++$(OBJDIR)/oas_cos_vardef.o:                  $(SRCDIR)/oas_cos_vardef.f90     \
++          $(OBJDIR)/data_parameters.o     
++	echo compiling oas_cos_vardef.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/oas_cos_vardef.f90 )
++#
++$(OBJDIR)/receive_fld.o:                     $(SRCDIR)/receive_fld.f90        \
++          $(OBJDIR)/data_parameters.o        $(OBJDIR)/data_modelconfig.o     \
++          $(OBJDIR)/data_parallel.o          $(OBJDIR)/data_runcontrol.o      \
++          $(OBJDIR)/data_constants.o         $(OBJDIR)/data_soil.o            \
++          $(OBJDIR)/oas_cos_vardef.o         $(OBJDIR)/data_fields.o          \
++          $(OBJDIR)/time_utilities.o         $(OBJDIR)/environment.o          \
++          $(OBJDIR)/src_tracer.o 
++	echo compiling receive_fld.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/receive_fld.f90 )
++#
++$(OBJDIR)/send_fld.o:                        $(SRCDIR)/send_fld.f90           \
++          $(OBJDIR)/data_parameters.o        $(OBJDIR)/data_modelconfig.o     \
++          $(OBJDIR)/data_parallel.o          $(OBJDIR)/data_runcontrol.o      \
++          $(OBJDIR)/data_constants.o         $(OBJDIR)/environment.o          \
++          $(OBJDIR)/oas_cos_vardef.o         $(OBJDIR)/data_fields.o          \
++          $(OBJDIR)/time_utilities.o         $(OBJDIR)/src_tracer.o 
++	echo compiling send_fld.f90
++	( cd $(OBJDIR) && $(F90) $(COMFLG1) $(SRCDIR)/send_fld.f90 )
++#
+ ################################################################################
+@@ -1144,3 +1208,3 @@
+           $(OBJDIR)/data_parameters.o        $(OBJDIR)/data_runcontrol.o      \
+-          $(OBJDIR)/data_tracer.o            $(OBJDIR)/src_conv_ifs.o         \
++          $(OBJDIR)/data_tracer.o            $(OBJDIR)/src_conv_ifs.o                                 \
+           $(OBJDIR)/src_artifdata.o          $(OBJDIR)/src_conv_tiedtke.o     \
+@@ -1190,3 +1254,3 @@
+ #
+-#  Dependencies of IFS convection
++#  add Dependencies of IFS convection
+ #
+@@ -1466,3 +1530,2 @@
+ 	( cd $(OBJDIR) && $(F90) $(COMFLG) $(SRCDIR)/IFS/yompldsw.F90 )
+-
+ #
+@@ -1487,3 +1550,4 @@
+           $(OBJDIR)/time_utilities.o         $(OBJDIR)/utilities.o            \
+-          $(OBJDIR)/mpe_io2.o                $(OBJDIR)/info_lm_f90.o
++          $(OBJDIR)/mpe_io2.o                $(OBJDIR)/info_lm_f90.o          \
++          $(OBJDIR)/bias_corrections.o
+ 	echo compiling lmorg.f90
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/ObjFiles cclm/ObjFiles
+--- cclm-sp_2.0/src/cclm/ObjFiles	2015-09-21 16:13:47.000000000 +0200
++++ cclm/ObjFiles	2023-07-25 16:08:58.330000900 +0200
+@@ -37,3 +37,4 @@
+                  $(OBJDIR)/utilities.o               \
+-                 $(OBJDIR)/vgrid_refatm_utils.o
++                 $(OBJDIR)/vgrid_refatm_utils.o      \
++                 $(OBJDIR)/bias_corrections.o 
+ #
+@@ -139,2 +140,11 @@
+ #
++OASOBJ =         $(OBJDIR)/oas_cos_define.o          \
++                 $(OBJDIR)/oas_cos_init.o            \
++                 $(OBJDIR)/oas_cos_vardef.o          \
++                 $(OBJDIR)/oas_cos_snd.o             \
++                 $(OBJDIR)/oas_cos_rcv.o             \
++                 $(OBJDIR)/oas_cos_finalize.o        \
++                 $(OBJDIR)/receive_fld.o             \
++                 $(OBJDIR)/send_fld.o          
++#
+ SATOBJ =         $(OBJDIR)/data_satellites.o         \
+@@ -147,3 +157,3 @@
+ #
+-# IFS convection
++# to be added: IFS convection
+ IFSOBJ =       $(OBJDIR)/parkind1.o  \
+@@ -194,4 +204,3 @@
+                $(OBJDIR)/vrec.o  \
+-               $(OBJDIR)/yompldsw.o  
+-
++               $(OBJDIR)/yompldsw.o
+ #
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/bias_corrections.f90 cclm/src/bias_corrections.f90
+--- cclm-sp_2.0/src/cclm/src/bias_corrections.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/bias_corrections.f90	2023-07-25 16:08:58.492480300 +0200
+@@ -0,0 +1,378 @@
++#ifdef OASIS_IOW_ESM
++MODULE bias_corrections
++
++USE netcdf, ONLY : &
++  nf90_open,               &
++  nf90_close,              &
++  nf90_get_var, &
++  nf90_inq_varid, &
++  nf90_get_att, &
++  NF90_NOWRITE, &
++  NF90_NOERR
++
++USE data_parameters,  ONLY : &
++  ireals,          &
++  iintegers
++  
++USE data_modelconfig, ONLY : &
++  ie,                     &
++  je,                     &
++  ie_tot,                 &
++  je_tot
++
++USE data_parallel,    ONLY : &
++  my_cart_id,      &
++  logbuf,          &
++  nproc,           & ! total number of processors: nprocx * nprocy
++  imp_logical,     & ! determines the correct LOGICAL type used in the
++  imp_integers,    &
++  icomm_world        ! communicator that belongs to igroup_world, i.e.
++                     ! = MPI_COMM_WORLD
++
++USE environment,      ONLY : &
++  model_abort, get_free_unit
++
++USE parallel_utilities, ONLY: &
++  distribute_values, distribute_field 
++  
++IMPLICIT NONE
++
++PUBLIC initialize_bias_corrections
++
++ENUM, BIND(C)
++    ENUMERATOR :: E_ASWDIR_S_CORRECTION = 1
++    ENUMERATOR :: E_ALWD_S_CORRECTION = 2
++    ENUMERATOR :: E_N_CORRECTIONS = 2
++ENDENUM
++
++! initializes names for corrextion -> corresponds to out variable that is corrected
++CHARACTER(len=8), PARAMETER, DIMENSION(E_N_CORRECTIONS) :: corrections_names = [ &
++    'ASWD_S', &
++    'ALWD_S' &
++    ] 
++
++REAL(KIND=ireals), ALLOCATABLE :: &
++    corrections(:,:,:,:)
++
++LOGICAL  ::  &
++    lcorrections(E_N_CORRECTIONS) = .FALSE., &
++    lat_night = .FALSE.
++CONTAINS
++
++SUBROUTINE process_input_corrections (nuin, ierrstat)
++    
++    ! Parameter list:
++      INTEGER (KIND=iintegers), INTENT (IN)      ::        &
++        nuin            ! Unit number for Namelist INPUT file
++    
++      INTEGER (KIND=iintegers), INTENT (INOUT)   ::        &
++        ierrstat        ! error status variable
++    
++      CHARACTER (LEN=80)        ::                       &
++        yerrmsg            ! error message
++        
++    ! Local variables: 
++      INTEGER (KIND=iintegers)   ::  &
++        i, iz_err
++
++    ! Define the namelist group
++      NAMELIST /correctionsctl/ lcorrections, lat_night
++                          
++    !------------------------------------------------------------------------------
++    !- End of header -
++    !------------------------------------------------------------------------------
++    
++    !------------------------------------------------------------------------------
++    !- Begin SUBROUTINE input_oasisctl
++    !------------------------------------------------------------------------------
++    
++    ierrstat = 0_iintegers
++    iz_err   = 0_iintegers
++    
++    IF ( ierrstat /= 0 ) THEN
++      WRITE(*,*) ' ERROR    *** Error while allocating variables in routine process_input_corrections  *** '
++      ierrstat   = 2
++      RETURN
++    ENDIF
++    
++    !------------------------------------------------------------------------------
++    !- Section 3: Input of the namelist values
++    !------------------------------------------------------------------------------
++    IF (my_cart_id == 0) THEN
++
++      READ (nuin, correctionsctl, IOSTAT=iz_err)
++
++    ENDIF
++
++    IF (nproc > 1) THEN
++      ! distribute error status to all processors
++      CALL distribute_values  (iz_err, 1, 0, imp_integers, icomm_world, ierrstat)
++    ENDIF
++
++    IF (iz_err /= 0) THEN
++      WRITE(*,*) "Could not read INPUT_BIAS, set lcorrections to default: ", lcorrections 
++      ierrstat = -1
++      RETURN
++    ENDIF
++    
++
++    !------------------------------------------------------------------------------
++    !- Section 4: Check values for errors and consistency
++    !------------------------------------------------------------------------------
++
++    IF (my_cart_id == 0) THEN
++    
++      DO i = 1, E_N_CORRECTIONS
++          IF ( lcorrections(i) /= .FALSE. .and.  lcorrections(i) /= .TRUE.) THEN
++              WRITE (*,*) ' ERROR  *** Wrong value ', lcorrections(i) , ' for correction ', i
++              ierrstat = 1002 
++                ierrstat = 1002 
++              ierrstat = 1002 
++          ENDIF
++      ENDDO
++
++      IF ( ierrstat /= 0 ) THEN
++          WRITE (*,*) ' ERROR  *** Error while checking values of the namelist oasisctl *** '
++          RETURN
++      ENDIF
++        
++    
++    ENDIF ! my_cart_id
++    
++    !------------------------------------------------------------------------------
++    !- Section 5: Distribute variables to all nodes
++    !------------------------------------------------------------------------------
++    
++    IF (nproc > 1) THEN
++    
++      IF (my_cart_id == 0) THEN
++        DO i = 1, E_N_CORRECTIONS
++            logbuf(i) = lcorrections(i)
++        ENDDO
++
++        logbuf(E_N_CORRECTIONS + 1) = lat_night 
++    
++          
++      ENDIF ! my_cart_id == 0
++      
++      CALL distribute_values (logbuf ,E_N_CORRECTIONS, 0, imp_logical, icomm_world, ierrstat)
++    
++      IF (my_cart_id /= 0) THEN
++        DO i = 1, E_N_CORRECTIONS
++            lcorrections(i) = logbuf(i) 
++        ENDDO
++
++        lat_night = logbuf(E_N_CORRECTIONS + 1)
++
++      ENDIF ! my_cart_id == 0
++    
++      IF ( ierrstat /= 0 ) THEN
++        WRITE (*,*) ' ERROR *** in distributing buffers *** '
++        RETURN
++      ENDIF
++    
++    ENDIF ! nproc
++    
++    !------------------------------------------------------------------------------
++    !- Section 6: Output of the namelist variables and their default values
++    !------------------------------------------------------------------------------
++    
++    WRITE (*,*) 'Apply bias corrections for:'
++
++    DO i = 1, E_N_CORRECTIONS
++        WRITE (*,*)  corrections_names(i), lcorrections(i)
++    ENDDO
++    !------------------------------------------------------------------------------
++    !- End of the Subroutine
++    !------------------------------------------------------------------------------
++    
++END SUBROUTINE process_input_corrections 
++
++SUBROUTINE read_namelist_corrections(ierror, yerrmsg)
++    
++    INTEGER (KIND=iintegers), INTENT(OUT)           ::                      &
++      ierror       ! error status
++    
++    CHARACTER (LEN=  *),      INTENT(OUT)           ::                      &
++      yerrmsg      ! error message
++    
++    !------------------------------------------------------------------------------
++    ! local variables:
++    INTEGER (KIND=iintegers)   ::   &
++      nuin,                         &
++      izerrstat
++    
++    CHARACTER (LEN=10)         ::   &
++      yinput = 'INPUT_BIAS'
++    
++    !------------------------------------------------------------------------------
++    !- End of header
++    !------------------------------------------------------------------------------
++     
++    !------------------------------------------------------------------------------
++    !- Begin Subroutine read_namelist_oasis
++    !------------------------------------------------------------------------------
++    
++    ierror    = 0_iintegers
++    izerrstat = 0_iintegers
++    
++    ! -----------------------------------------------------------------
++    ! 1 Open NAMELIST-INPUT file
++    ! ----------------------------------------------------------------
++        
++    IF (my_cart_id == 0) THEN
++    
++      WRITE  (*,*) '    INPUT OF THE NAMELIST FOR BIAS CORRECTIONS'
++
++      CALL get_free_unit (nuin)
++      OPEN (nuin, FILE=yinput, FORM='FORMATTED', STATUS='UNKNOWN',  &
++        IOSTAT=izerrstat)
++      IF (izerrstat /= 0) THEN
++        yerrmsg = ' ERROR    *** Error while opening file '//yinput//' *** '
++        ierror   = 2
++        RETURN
++      ENDIF
++          
++    ENDIF
++        
++    ! -----------------------------------------------------------------
++    ! 2 read the NAMELIST group oasisctl
++    ! ----------------------------------------------------------------
++    
++    CALL process_input_corrections (nuin, izerrstat)
++    
++    IF (izerrstat > 0) THEN
++      yerrmsg  = ' ERROR *** Wrong values occured in NAMELIST group /correctionsctl/ *** '
++      ierror   = 3
++      RETURN
++    ELSEIF (izerrstat < 0) THEN
++      WRITE (*,*) ' ERROR while reading NAMELIST group /correctionsctl/ in process_input_corrections '
++      ierror   = 4
++      RETURN
++    ENDIF
++    
++    ! -----------------------------------------------------------------
++    ! 3 Close NAMELIST-INPUT file
++    ! ----------------------------------------------------------------
++    
++    IF (my_cart_id == 0) THEN
++    
++      CLOSE (nuin, STATUS='KEEP', IOSTAT=izerrstat)
++      IF (izerrstat /= 0) THEN
++        yerrmsg = ' ERROR *** while closing file '//yinput//'*** '
++        ierror  = 5
++      ENDIF
++    ENDIF
++        
++    !------------------------------------------------------------------------------
++    !- End of the Subroutine
++    !------------------------------------------------------------------------------
++    
++END SUBROUTINE read_namelist_corrections
++
++SUBROUTINE initialize_bias_corrections(ierror, yerrmsg)
++
++    INTEGER (KIND=iintegers), INTENT(OUT)           ::                      &
++        ierror       ! error status
++  
++    CHARACTER (LEN=  *),      INTENT(OUT)           ::                      &
++        yerrmsg      ! error message
++
++    INTEGER(KIND=iintegers) :: &
++      istatus,                 & ! NetCDF status
++      ncfileid, ncvarid,       & ! NetCDF IDs
++      nerror, &
++      i, j
++
++    REAL(KIND=ireals) :: &
++      fillvalue     
++    
++    REAL(KIND=ireals), ALLOCATABLE :: &
++      corrections_tot(:,:,:,:)     ! Temporary buffer for receiving
++
++    CHARACTER(LEN=2) :: yj
++
++    CHARACTER(LEN=128) :: filename
++
++    ! Read namelist for corrections
++    CALL read_namelist_corrections(ierror, yerrmsg)
++
++    IF (ierror /= 0) THEN
++      WRITE(*, *) yerrmsg
++      WRITE(*, *) "Use defaults instead: ", lcorrections
++      RETURN
++    ENDIF 
++
++    ! allocate resources for each process
++    ALLOCATE(corrections(E_N_CORRECTIONS, 12, ie, je))
++
++    ! root process allocates temporal storage for reading in the correction
++    ALLOCATE(corrections_tot(E_N_CORRECTIONS, 12, ie_tot, je_tot))
++    corrections_tot(:, :, :, :) = 0.0_ireals
++    
++    ! Read in correction for each month
++    DO i = 1, E_N_CORRECTIONS
++        IF (.NOT. lcorrections(i)) THEN
++            CYCLE
++        ENDIF
++
++        DO j = 1, 12
++            WRITE (yj,'(I2.2)') j 
++            yj = ADJUSTL(yj)
++
++            filename = 'corrections/'//TRIM(corrections_names(i))//'-'//TRIM(yj)//'.nc'
++
++            istatus = nf90_open(TRIM(filename), NF90_NOWRITE, ncfileid)
++            IF (istatus /= NF90_NOERR) THEN
++                WRITE(*,*) 'Could not open ', TRIM(filename), ' for bias correction. Unset correction.'
++                CYCLE
++            ENDIF
++
++            istatus = nf90_inq_varid(ncfileid, TRIM(corrections_names(i)) , ncvarid)
++            IF (istatus /= NF90_NOERR) THEN
++                WRITE(*,*) 'Could not get varid for variable '//TRIM(corrections_names(i))//'. Unset correction.'
++                CYCLE
++            ENDIF
++
++            istatus = nf90_get_var(ncfileid, ncvarid, corrections_tot(i,j,:,:), &
++                                (/ 1, 1 /),      &
++                                (/ ie_tot, je_tot/))
++            IF (istatus /= NF90_NOERR) THEN
++                WRITE(*,*) 'Could not get variable '//TRIM(corrections_names(i))//'. Unset correction.'
++                corrections_tot(i,j,:,:) = 0.0_ireals
++                CYCLE
++            ENDIF    
++
++            istatus = nf90_get_att(ncfileid, ncvarid, "_FillValue", fillvalue)
++            IF (istatus /= NF90_NOERR) THEN
++                WRITE(*,*) 'Could not get fill value. Unset correction.'
++                corrections_tot(i,j,:,:) = 0.0_ireals
++                CYCLE
++            ENDIF             
++
++            istatus = nf90_close(ncfileid)
++            IF (istatus /= NF90_NOERR) THEN
++                WRITE(*,*) 'Could not close ', TRIM(filename), 'for bias correction.'
++                CYCLE
++            ENDIF
++
++            WHERE (corrections_tot(i,j,:,:) == fillvalue) corrections_tot(i,j,:,:) = 0.0
++
++            CALL distribute_field(corrections_tot(i,j,:,:), ie_tot, je_tot, corrections(i,j,:,:), ie, je, 0, nerror)
++        ENDDO
++
++    ENDDO
++
++    DEALLOCATE(corrections_tot)
++    WRITE (*,*) "Read in bias correction fields."
++
++END SUBROUTINE initialize_bias_corrections
++
++SUBROUTINE finalize_bias_corrections
++
++    DEALLOCATE(corrections)
++
++END SUBROUTINE finalize_bias_corrections
++
++END MODULE bias_corrections
++#endif
+\ No newline at end of file
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/data_fields.f90 cclm/src/data_fields.f90
+--- cclm-sp_2.0/src/cclm/src/data_fields.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/data_fields.f90	2023-07-25 16:08:58.501268600 +0200
+@@ -368,2 +368,6 @@
+     t_g      (:,:,:),  & ! weighted surface temperature               (  K  )
++#ifdef OASIS_IOW_ESM
++    t_g_rad  (:,:,:),  & ! weighted surface temperature for radiation (  K  )
++    zalso_flc(:,:),  & ! averaged surface shortwave albedo from flux calculator ( 1 )
++#endif
+     tg_radstep (:,:),  & ! ground temperature
+@@ -373,2 +377,12 @@
+                          ! soil layer                                 (  K  )
++!!naveed dummy varibales
++     qv     (:,:,:,:),  &
++     qi     (:,:,:,:),  &
++     qc     (:,:,:,:),  &
++     qr     (:,:,:,:),  &
++     qs     (:,:,:,:),  & 
++    qv_bd     (:,:,:,:),  &
++     qc_bd     (:,:,:,:),  &
++    qi_bd     (:,:,:,:),  &
++!!
+     t_cl     (:,:),    & ! temperature between medium and lower
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/data_runcontrol.f90 cclm/src/data_runcontrol.f90
+--- cclm-sp_2.0/src/cclm/src/data_runcontrol.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/data_runcontrol.f90	2023-07-25 16:08:58.534161600 +0200
+@@ -268,4 +268,4 @@
+                     ! indices for permutation of two time levels
+-    ntke            ! corresponds to ntstep
+-
++    ntke,         &   ! corresponds to ntstep
++   nzjulianday     ! day of the year
+ ! 2. boundary definition and update
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/environment.f90 cclm/src/environment.f90
+--- cclm-sp_2.0/src/cclm/src/environment.f90	2015-09-21 16:13:47.000000000 +0200
++++ cclm/src/environment.f90	2023-07-25 16:08:58.552716200 +0200
+@@ -459,2 +459,5 @@
+ 
++#ifdef OASIS_IOW_ESM
++    USE oas_cos_vardef,  only: kl_comm
++#else
+ #ifdef COUP_OAS
+@@ -462,2 +465,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+@@ -505,3 +509,10 @@
+   yerrmsg    = '    '
+-
++#ifdef OASIS_IOW_ESM
++#if defined(MESSYMMD)
++  WRITE (*,'(a)') 'ERROR: MESSy-MMD (-DMESSYMMD) and OASIS (-DOASIS_IOW_ESM) cannot run at the same time!'
++  ierror = 33
++  yerrmsg = 'ERROR: MESSy-MMD (-DMESSYMMD) and OASIS (-DOASIS_IOW_ESM) cannot run at the same time!'
++  RETURN
++#endif
++#else
+ #if defined(MESSYMMD) && defined(COUP_OAS)
+@@ -512,2 +523,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+@@ -515,2 +527,6 @@
+ ! from OASIS
++#ifdef OASIS_IOW_ESM
++  CALL oas_cos_init
++  icomm_world = kl_comm
++#else
+ #ifdef COUP_OAS
+@@ -540,2 +556,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+@@ -662,2 +679,5 @@
+ 
++#ifdef OASIS_IOW_ESM
++  CALL oas_cos_finalize
++#else
+ #ifdef COUP_OAS
+@@ -671,2 +691,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+@@ -774,2 +795,5 @@
+ 
++#ifdef OASIS_IOW_ESM
++USE data_parallel, ONLY : icomm_world
++#else
+ #ifdef COUP_OAS
+@@ -777,2 +801,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+@@ -877,2 +902,5 @@
+ 
++#ifdef OASIS_IOW_ESM
++  CALL MPI_ABORT (icomm_world, ierrorcode, nzerrcode)
++#else
+ #ifdef COUP_OAS
+@@ -882,2 +910,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/.fortls cclm/src/.fortls
+--- cclm-sp_2.0/src/cclm/src/.fortls	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/.fortls	2023-07-25 16:08:58.333905700 +0200
+@@ -0,0 +1,16 @@
++{
++  "source_dirs": ["IFS"],
++  "excl_paths": [],
++  "excl_suffixes": ["_skip.f90"],
++  "pp_suffixes": [".f03", ".F90"],
++  "pp_defs": {"HAVE_PACKAGE": ""},
++  "include_dirs": ["rel_include/dir_path", "/abs/include/dir/path"],
++  "ext_source_dirs": ["/media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/flux_calculator/src/flux_lib",
++                      "/media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/flux_calculator/src/flux_lib/constants",
++                      "/media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/flux_calculator/src/flux_lib/auxiliaries",
++                      "/media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/flux_calculator/src/flux_lib/mass",
++                      "/media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/flux_calculator/src/flux_lib/heat",
++                      "/media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/flux_calculator/src/flux_lib/momentum"],
++  "lowercase_intrinsics": false,
++  "debug_log": false
++}
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/lmorg.f90 cclm/src/lmorg.f90
+--- cclm-sp_2.0/src/cclm/src/lmorg.f90	2015-09-21 16:13:47.000000000 +0200
++++ cclm/src/lmorg.f90	2023-07-25 16:08:58.572658600 +0200
+@@ -237,2 +237,5 @@
+        aer_su_bd, aer_du_bd, aer_bc_bd, aer_or_bd, aer_ss_bd, t_so
++#ifdef OASIS_IOW_ESM
++USE data_fields,         ONLY: t_g_rad
++#endif
+ 
+@@ -243,3 +246,2 @@
+ 
+-
+ USE data_modelconfig,    ONLY:   ie, je, ke, ke1, jstartpar, jendpar,        &
+@@ -294,3 +296,9 @@
+                   i_communications_dyn, i_cleanup, i_asynio_wait,            &
++
++#ifdef OASIS_IOW_ESM 
++                  i_cpl_define, collect_timings
++#else
+                   collect_timings
++#endif
++
+ USE utilities,           ONLY:   get_utc_date
+@@ -347,2 +355,6 @@
+ 
++#ifdef OASIS_IOW_ESM
++ USE oas_cos_vardef,  ONLY : ytype_oce, debug_oasis
++ USE bias_corrections, ONLY: initialize_bias_corrections
++#endif
+ !==============================================================================
+@@ -365,3 +377,4 @@
+   nzdays,        & ! for recording a forecast day
+-  i,j,k, kzdims(24), izdebug, nzdiv, isp, kstart, iztrcr, jt
++  i,j,k, kzdims(24), izdebug, nzdiv, isp, kstart, iztrcr, jt, &
++  im1, jm1, ip1, jp1
+ 
+@@ -463,2 +476,12 @@
+   ENDIF
++#ifdef OASIS_IOW_ESM
++  ! Input of the OASIS coupling namelist
++  CALL read_namelist_oasis (izerror, yzerrmsg)
++  IF (debug_oasis > 15 .AND. my_cart_id==0) PRINT *, 'izerror=',izerror
++  IF (izerror /= 0_iintegers) THEN
++    CALL model_abort (my_world_id, 100+izerror, yzerrmsg,             &
++                                   'read_namelist_oasis')
++  ENDIF
++  IF (debug_oasis > 15 .AND. my_cart_id==0) PRINT *, 'Finished reading oasisctl'
++#endif
+ 
+@@ -888,2 +911,5 @@
+       t_g   (:,:,nnow) = t_g (:,: ,nnew)
++#ifdef OASIS_IOW_ESM
++      t_g_rad   (:,:,nnow) = t_g_rad (:,: ,nnew)
++#endif
+       IF (lmulti_layer) THEN
+@@ -896,2 +922,8 @@
+ 
++#ifdef OASIS_IOW_ESM
++  CALL oas_cos_define
++  IF (ltime) CALL get_timings (i_cpl_define, ntstep, dt, izerror)
++
++  CALL initialize_bias_corrections(izerror, yzerrmsg)
++#else
+ #if defined COUP_OAS
+@@ -907,2 +939,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+ 
+@@ -1468,7 +1501,2 @@
+ 
+-#if defined COUP_OAS
+-! OASIS4 only
+-!    CALL oas_cos_update_time(ntstep+1)
+-#endif
+-
+ #ifdef MESSY
+@@ -1760,2 +1788,8 @@
+ 
++#ifdef OASIS_IOW_ESM
++  IF ( ytype_oce == 'flxcl' ) THEN
++    CALL receive_fld
++  ENDIF
++#endif
++
+ !------------------------------------------------------------------------------
+@@ -2383,2 +2417,5 @@
+       t_g   (:,:,nx0) = t_g (:,: ,nnow)
++#ifdef OASIS_IOW_ESM
++      t_g_rad   (:,:,nx0) = t_g_rad (:,: ,nnow)
++#endif
+       t_snow(:,:,nx0) = t_snow (:,: ,nnow)
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/netcdf_io.f90 cclm/src/netcdf_io.f90
+--- cclm-sp_2.0/src/cclm/src/netcdf_io.f90	2015-09-21 16:14:04.000000000 +0200
++++ cclm/src/netcdf_io.f90	2023-07-25 16:08:58.600648100 +0200
+@@ -46,2 +46,7 @@
+ !  For the COSMO-Model only use vcoord and refatm from vgrid_refatm_utils
++! V5_00_clm6   2015/09/11 H.-J. Panitz, IMK/KIT
++!  Due to consistency reason change name of wet bulb temperature to wbtemp_13c
++! V5_00_clm7   2015/12/04  B. Rockel (_br), HZG
++!  bug fix to correctly write all attributes into the header of NetCDF files
++!   in case of asynchronous I/O
+ !
+@@ -2307,2 +2312,3 @@
+ 
++!_br 25.11.08
+   ELSE ! model coordinate
+@@ -2543,4 +2549,9 @@
+         ENDIF
+-!_br 08.09.15        ierror=nf90_def_var(ncid, "wbt_13c", NF90_FLOAT, jwbt13VarID)
++!
++!HJP 2015-09-11 Begin
++! Due to consistency reason change name of wet bulb temperature to wbtemp_13c
++!       ierror=nf90_def_var(ncid, "wbt_13c", NF90_FLOAT, jwbt13VarID)
+         ierror=nf90_def_var(ncid, "wbtemp_13c", NF90_FLOAT, jwbt13VarID)
++!HJP 2015-09-10 End
++!
+         IF (ierror /= NF90_NOERR) THEN
+@@ -2561,2 +2572,3 @@
+       ENDIF
++!_br 25.11.08 end
+ 
+@@ -3289,10 +3301,2 @@
+          (TRIM(var(i1,i2,i3)%name) == 'SNOWLMT')      .OR.      &
+-!_br 08.09.15
+-         (TRIM(var(i1,i2,i3)%name) == 'SI')           .OR.      &
+-         (TRIM(var(i1,i2,i3)%name) == 'LFC_ML')       .OR.      &
+-         (TRIM(var(i1,i2,i3)%name) == 'SWISS00')      .OR.      &
+-         (TRIM(var(i1,i2,i3)%name) == 'SWISS12')      .OR.      &
+-         (TRIM(var(i1,i2,i3)%name) == 'CIN_MU')       .OR.      &
+-         (TRIM(var(i1,i2,i3)%name) == 'CIN_ML')       .OR.      &
+-!_br 08.09.15 end
+          (var(i1,i2,i3)%lsm /= ' ') ) THEN
+@@ -3609,3 +3613,4 @@
+ 
+-    rbuflen = ke1+5+ke_soil+1
++!_br 04.12.15    rbuflen = ke1+5+ke_soil+1
++    rbuflen = ke1+7+ke_soil+1 !_br 04.12.15
+ 
+@@ -3714,2 +3719,10 @@
+ 
++!_br 04.12.15
++      realcnt = realcnt+1
++      realbuf(realcnt) = refatm%delta_t
++
++      realcnt = realcnt+1
++      realbuf(realcnt) = refatm%h_scal
++!_br 04.12.15 end
++
+       realcnt = realcnt+1
+@@ -3835,2 +3848,10 @@
+ 
++!_br 04.12.15
++      realcnt = realcnt+1
++      refatm%delta_t =  realbuf(realcnt)
++
++      realcnt = realcnt+1
++      refatm%h_scal =  realbuf(realcnt)
++!_br 04.12.15 end
++
+       realcnt = realcnt+1
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/oas_cos_define.f90 cclm/src/oas_cos_define.f90
+--- cclm-sp_2.0/src/cclm/src/oas_cos_define.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/oas_cos_define.f90	2023-07-25 16:08:58.612364900 +0200
+@@ -0,0 +1,903 @@
++#ifdef OASIS_IOW_ESM
++SUBROUTINE oas_cos_define
++!
++!**** *oas_cos_define*  - Define grids etc for OASIS
++!
++!     Purpose. 
++!     --------
++!        Define grid and field information for atmosphere
++!        exchange between AGCM, OGCM and COUPLER. (OASIS3 software)
++!
++!**   Interface.
++!     ----------
++!       *CALL*  *oas_cos_define*
++!
++!     Input:
++!     -----
++!
++!     Output:
++!     ------
++!
++!     Method:
++!     ------
++!        
++!     Externals:
++!     ---------
++!       prism_init, prism_init_comp, prism_get_localcomm : prism library
++!
++!     Author:
++!     -------
++!       R. Redler, NEC Laboratories Europe
++!       K. Mogensen, ECMWF
++!
++!     Modifications.
++!     --------------
++!       E. Maisonnave : adapted from NEMO to COSMO
++!       A. Dobler: adapted to OASIS3
++!       E. Maisonnave : adapted to COSMO
++!       2011-11 J. Brauch: calculate area
++!       2012-08: unified interface for OASIS - COSMO/CLM, Will/Davin/Brauch/Weiher
++!       2013-06: extension for staggered variables for ECHAM coupling, Weiher
++!       2013-08-05: unified OASIS interface (UOI), Will/Byrne
++
++USE data_parameters,  ONLY : &
++  ireals,                 &
++  iintegers
++
++USE data_runcontrol,  ONLY : &
++  nuspecif
++
++USE oas_cos_vardef
++
++USE mod_oasis_namcouple    ! OASIS3-MCT namcouple variables: e.g. coupling time step
++
++USE data_modelconfig, ONLY : &
++  ie,                     &
++  je,                     &
++  ie_tot,                 &
++  je_tot,                 &
++  dt
++
++USE data_parallel,    ONLY : &
++  my_cart_id,             & ! rank of this subdomain in the cartesian communicator
++  isubpos,                & ! positions of the subdomains in the total domain. Given
++                            ! are the i- and the j-indices of the lower left and the
++                            ! upper right grid point in the order
++                            !                  i_ll, j_ll, i_ur, j_ur.
++                            ! Only the interior of the domains are considered, not
++                            ! the boundary lines.
++  nboundlines,            & ! number of boundary lines of the domain for which
++                            ! no forecast is computed = overlapping boundary
++                            ! lines of the subdomains
++  intbuf,                 & !
++  charbuf
++                            
++USE parallel_utilities, ONLY : &
++  distribute_field
++
++USE environment,        ONLY : &
++  get_free_unit
++
++USE netcdf
++
++
++IMPLICIT NONE
++
++!
++! local variables
++
++INTEGER(KIND=iintegers) :: &
++  ji, i, j,          & !
++  id_part,                 & !
++  paral(5),                & ! OASIS3 box partition
++  var_nodims(2),           & ! 
++  ishape(2,2),             & ! shape of arrays passed to PSMILe
++  ierrstat,                & !
++  izerrstat,               & !
++  istatus,                 & ! NetCDF status
++  ncfileid, ncvarid          ! NetCDF IDs
++
++!------------------------------------------------------------------------------
++!- End of header
++!------------------------------------------------------------------------------
++
++      
++! -----------------------------------------------------------------
++! ... Setup the OASIS interface
++! ----------------------------------------------------------------
++ 
++IF ( my_cart_id == 0 .AND. debug_oasis > 15 ) THEN
++  WRITE(nulout,'(A)') ' *****************************************************'
++  WRITE(nulout,'(A)') ' *     CCLM: Setting up OASIS3(-MCT) interface       *'
++  WRITE(nulout,'(A)') ' *****************************************************'
++  CALL flush(nulout)
++ENDIF
++      
++! Subdomain size without halo (remove the halo, halo width is "nboundlines")
++nldi = 1  + nboundlines
++nldj = 1  + nboundlines
++nlei = ie - nboundlines
++nlej = je - nboundlines
++      
++iboundstart = 0
++jboundstart = 0
++      
++! Subdomain size without halo BUT with boundlines
++! (For outer domains, the halo has been falsely removed since there is no halo, add it back)
++IF ( isubpos(my_cart_id,1) == 1 + nboundlines ) THEN
++  nldi = 1
++  iboundstart = nboundlines
++ENDIF
++IF ( isubpos(my_cart_id,3) == ie_tot - nboundlines ) THEN
++  nlei = ie
++ENDIF
++IF ( isubpos(my_cart_id,2) == 1 + nboundlines ) THEN
++  nldj = 1
++  jboundstart = nboundlines
++ENDIF
++IF ( isubpos(my_cart_id,4) == je_tot - nboundlines ) THEN
++  nlej = je
++ENDIF
++      
++! Local extent
++jih = nlei - nldi + 1
++jjh = nlej - nldj + 1
++
++IF ( my_cart_id == 0 .AND. debug_oasis > 15 ) THEN
++  WRITE(nulout,*) '++++ CCLM sub-domain: my_cart_id=',my_cart_id, &
++    ' nldi,nlei,nldj,nlej=',nldi,nlei,nldj,nlej
++  CALL flush(nulout)
++ENDIF
++
++ALLOCATE (zmask_tot(ie_tot,je_tot), STAT=ierrstat )
++zmask_tot(:,:) = 0.0_ireals
++
++IF ( ytype_oce=='flxcl') THEN 
++  ALLOCATE ( zmask(ie,je), zmask_u(ie,je), zmask_v(ie,je), STAT=ierrstat )
++  zmask(:,:) = 0.0_ireals
++  zmask_u(:,:) = 0.0_ireals
++  zmask_v(:,:) = 0.0_ireals
++
++  !--------------------------------------
++  ! Read in masks from mapping files
++  !--------------------------------------
++
++  ! 1. Get gridcells that are coupled (zmask = 0.0) or not (zmask = 1.0)
++  !--------------------------------------
++  ! 1. a t-grid
++  istatus=nf90_open('mappings/maskfile.nc', NF90_NOWRITE, ncfileid)
++  IF (istatus /= nf90_noerr) THEN
++    WRITE (*,*) "ERROR no mappings/maskfile.nc found. Abort."
++    istatus = nf90_close(ncfileid)
++    RETURN
++  ENDIF
++  istatus=nf90_inq_varid(ncfileid, 'frac_coupled' , ncvarid)
++  istatus=nf90_get_var(ncfileid, ncvarid, zmask_tot, &
++        (/ 1, 1 /),      &
++          (/ ie_tot, je_tot /))
++  istatus=nf90_close(ncfileid)
++  WHERE (zmask_tot > 0.0_ireals)  zmask_tot = 1.0_ireals 
++  WHERE (zmask_tot <= 0.0_ireals)  zmask_tot = 0.0_ireals 
++  zmask_tot = 1.0_ireals - zmask_tot
++
++  CALL distribute_field(zmask_tot, ie_tot, je_tot, zmask, ie, je, 0, nerror)
++  
++  !--------------------------------------
++  ! 1. b u-grid
++  istatus=nf90_open('mappings/maskfile_u_grid.nc', NF90_NOWRITE, ncfileid)
++  IF (istatus /= nf90_noerr) THEN
++    WRITE (*,*) "WARNING no mappings/maskfile_u_grid.nc found. Use mappings/maskfile.nc instead"
++    istatus = nf90_close(ncfileid)
++  ELSE
++    istatus=nf90_inq_varid(ncfileid, 'frac_coupled' , ncvarid)
++    istatus=nf90_get_var(ncfileid, ncvarid, zmask_tot, &
++          (/ 1, 1 /),      &
++            (/ ie_tot, je_tot /))
++    istatus=nf90_close(ncfileid)
++    WHERE (zmask_tot > 0.0_ireals)  zmask_tot = 1.0_ireals 
++    WHERE (zmask_tot <= 0.0_ireals)  zmask_tot = 0.0_ireals 
++    zmask_tot = 1.0_ireals - zmask_tot
++  ENDIF
++
++  CALL distribute_field(zmask_tot, ie_tot, je_tot, zmask_u, ie, je, 0, nerror)
++
++  !--------------------------------------
++  ! 1. c v-grid
++  istatus=nf90_open('mappings/maskfile_v_grid.nc', NF90_NOWRITE, ncfileid)
++  IF (istatus /= nf90_noerr) THEN
++    WRITE (*,*) "WARNING no mappings/maskfile_v_grid.nc found. Use mappings/maskfile.nc instead"
++    istatus = nf90_close(ncfileid)
++  ELSE
++    istatus=nf90_inq_varid(ncfileid, 'frac_coupled' , ncvarid)
++    !read into zmask here, later this will be a separate variable
++    istatus=nf90_get_var(ncfileid, ncvarid, zmask_tot, &
++          (/ 1, 1 /),      &
++            (/ ie_tot, je_tot /))
++    istatus=nf90_close(ncfileid)
++    WHERE (zmask_tot > 0.0_ireals)  zmask_tot = 1.0_ireals 
++    WHERE (zmask_tot <= 0.0_ireals)  zmask_tot = 0.0_ireals 
++    zmask_tot = 1.0_ireals - zmask_tot
++  ENDIF
++
++  CALL distribute_field(zmask_tot, ie_tot, je_tot, zmask_v, ie, je, 0, nerror)
++
++  ! 2. Get fraction of gridcells that are coupled (fmask < 1.0) or not (fmask = 1.0)
++  !--------------------------------------
++  ! 2. a t-grid
++  ALLOCATE (fmask (ie,je), fmask_u(ie,je), fmask_v(ie,je), fmask_tot(ie_tot,je_tot), STAT=ierrstat) 
++  istatus=nf90_open('mappings/maskfile.nc', NF90_NOWRITE, ncfileid)
++  IF (istatus /= nf90_noerr) THEN
++    WRITE (*,*) "ERROR no mappings/maskfile.nc found. Abort."
++    istatus = nf90_close(ncfileid)
++    RETURN
++  ENDIF
++  istatus=nf90_inq_varid(ncfileid, 'frac_coupled' , ncvarid)
++  istatus=nf90_get_var(ncfileid, ncvarid, fmask_tot, &
++        (/ 1, 1 /),      &
++          (/ ie_tot, je_tot /))
++  istatus=nf90_close(ncfileid)
++  ! Uncomment the following two lines to avoid means values at border cells
++  ! WHERE (fmask_tot > 0.0_ireals)  fmask_tot = 1.0_ireals 
++  ! WHERE (fmask_tot <= 0.0_ireals)  fmask_tot = 0.0_ireals 
++  fmask_tot = 1.0_ireals - fmask_tot 
++
++  CALL distribute_field(fmask_tot, ie_tot, je_tot, fmask, ie, je, 0, nerror)
++  
++  !--------------------------------------
++  ! 2. b u-grid
++  istatus=nf90_open('mappings/maskfile_u_grid.nc', NF90_NOWRITE, ncfileid)
++  IF (istatus /= nf90_noerr) THEN
++    WRITE (*,*) "WARNING no mappings/maskfile_u_grid.nc found. Use mappings/maskfile.nc instead"
++    istatus = nf90_close(ncfileid)
++  ELSE
++    fmask_tot = 0.0_ireals
++    istatus=nf90_inq_varid(ncfileid, 'frac_coupled' , ncvarid)
++    istatus=nf90_get_var(ncfileid, ncvarid, fmask_tot, &
++          (/ 1, 1 /),      &
++            (/ ie_tot, je_tot /))
++    istatus=nf90_close(ncfileid)
++    ! Uncomment the following two lines to avoid means values at border cells
++    ! WHERE (fmask_tot > 0.0_ireals)  fmask_tot = 1.0_ireals 
++    ! WHERE (fmask_tot <= 0.0_ireals)  fmask_tot = 0.0_ireals 
++    fmask_tot = 1.0_ireals - fmask_tot 
++  ENDIF
++
++  CALL distribute_field(fmask_tot, ie_tot, je_tot, fmask_u, ie, je, 0, nerror)
++
++  !--------------------------------------
++  ! 2. c v-grid
++  istatus=nf90_open('mappings/maskfile_v_grid.nc', NF90_NOWRITE, ncfileid)
++  IF (istatus /= nf90_noerr) THEN
++    WRITE (*,*) "WARNING no mappings/maskfile_v_grid.nc found. Use mappings/maskfile.nc instead"
++    istatus = nf90_close(ncfileid)
++  ELSE
++    fmask_tot = 0.0_ireals
++    istatus=nf90_inq_varid(ncfileid, 'frac_coupled' , ncvarid)
++    istatus=nf90_get_var(ncfileid, ncvarid, fmask_tot, &
++          (/ 1, 1 /),      &
++            (/ ie_tot, je_tot /))
++    istatus=nf90_close(ncfileid)
++    ! Uncomment the following two lines to avoid means values at border cells
++    ! WHERE (fmask_tot > 0.0_ireals)  fmask_tot = 1.0_ireals 
++    ! WHERE (fmask_tot <= 0.0_ireals)  fmask_tot = 0.0_ireals 
++    fmask_tot = 1.0_ireals - fmask_tot
++  ENDIF
++
++  CALL distribute_field(fmask_tot, ie_tot, je_tot, fmask_v, ie, je, 0, nerror)
++
++  DEALLOCATE(fmask_tot)
++ENDIF
++
++! With OASIS3, all domains involved; for now, this will also be valid for 
++! OASIS3-MCT (coupling only on a subset of subdomains becomes important if
++! many processors are used)
++lpe_cpl = .TRUE.
++
++IF ( debug_oasis > 15 .AND. my_cart_id == 0) THEN
++  WRITE(nulout,*) ' prism_terminate_grids_writing '
++  CALL flush(nulout)
++ENDIF
++
++IF ( lpe_cpl ) THEN
++
++! -----------------------------------------------------------------
++! ... Define the partition
++! -----------------------------------------------------------------
++
++  ! whole domain decomposition can be represented by a rectangle
++  paral(1) = 2  ! 2 means box partitioning
++  ! Global extent in x
++  paral(5) = ie_tot
++  ! Upper left corner global offset
++  paral(2) = isubpos(my_cart_id,1)-1-iboundstart + ( isubpos(my_cart_id,2)-1-jboundstart) * paral(5)
++  ! Local extent in x
++  paral(3) = jih
++  ! Local extent in y
++  paral(4) = jjh
++
++!  write(*,*) "il_paral cclm",  paral(1),paral(2), paral(3), paral(4), paral(5)
++  CALL prism_def_partition_proto( id_part, paral, nerror )
++
++
++  IF ( nerror /= PRISM_Success ) THEN
++    CALL prism_abort_proto (ncomp_id, 'oas_cos_define', 'Failure in prism_def_partition' )
++  ENDIF
++
++! -----------------------------------------------------------------
++! ... Initialize some variables
++! ----------------------------------------------------------------
++
++  nfld_snd_flc = 0
++
++  nfld_rcv_flc = 0
++  nfld_rcv_flc_early = 0
++  nfld_snd_tot = 0
++  nfld_rcv_tot = 0
++
++! -----------------------------------------------------------------
++! ... Define list of SENT variables per coupling
++! ----------------------------------------------------------------
++
++  nfld = 0
++
++  IF (ytype_oce == 'flxcl') THEN
++    WRITE(nulout,*) 'Use coupling time step dt_cp=', dt_cp
++    IF ( debug_oasis > 15 .AND. my_cart_id == 0) THEN        
++      WRITE(nulout,*) ' coupling time step dt_cp=', dt_cp
++      CALL flush(nulout)
++    ENDIF
++    
++    nfld_snd_flc = 17
++    ALLOCATE ( nlev_snd_flc (nfld_snd_flc), STAT=ierrstat )
++    ALLOCATE ( nam_snd_flc  (nfld_snd_flc), STAT=ierrstat )
++    nlev_snd_flc = (/1,1,1,1,1,1,1,1,1,1, &
++                    1,1,1,1,1,1,1/)
++
++    nam_snd_flc( 1) =  'ASTATM00'
++    nam_snd_flc( 2) =  'ASPATM00'
++    nam_snd_flc( 3) =  'ASPSUR00'
++    nam_snd_flc( 4) =  'ASMRAI00'
++    nam_snd_flc( 5) =  'ASMSNO00'
++    nam_snd_flc( 6) =  'ASRLWD00'
++    nam_snd_flc( 7) =  'ASRLWU00'
++    nam_snd_flc( 8) =  'ASRSDD00'
++    nam_snd_flc( 9) =  'ASRSIN00'
++    nam_snd_flc(10) =  'ASU10M00'
++    nam_snd_flc(11) =  'ASV10M00'
++    nam_snd_flc(12) =  'ASAMOI00'
++    nam_snd_flc(13) =  'ASAMOM00'
++    nam_snd_flc(14) =  'ASQATM00'
++    nam_snd_flc(15) =  'ASUATM00'
++    nam_snd_flc(16) =  'ASVATM00'
++    nam_snd_flc(17) =  'ASALBA00'
++    
++    DO ji = 1, nfld_snd_flc
++      nfld = nfld + nlev_snd_flc(ji)
++    ENDDO
++  ENDIF
++
++  ! total number of fields to be sent:
++  nfld_snd_tot = nfld
++
++! -----------------------------------------------------------------
++! ... Define list of RECEIVED variables per coupling
++! ----------------------------------------------------------------
++
++  nfld = 0
++
++  IF ( ytype_oce == 'flxcl' ) THEN
++    nfld_rcv_flc = 9
++    nfld_rcv_flc_early = 4
++    ALLOCATE ( nlev_rcv_flc (nfld_rcv_flc), STAT=ierrstat )
++    ALLOCATE ( nam_rcv_flc  (nfld_rcv_flc), STAT=ierrstat )
++    nlev_rcv_flc = (/1,1,1,1,1,1,1,1,1/)
++
++    nam_rcv_flc(1) =  'ARTSUR00'
++    nam_rcv_flc(2) =  'ARRBBR00'
++    nam_rcv_flc(3) =  'ARFICE00'
++    nam_rcv_flc(4) =  'ARALBE00'
++    nam_rcv_flc(5) =  'ARMEVA00'
++    nam_rcv_flc(6) =  'ARHLAT00'
++    nam_rcv_flc(7) =  'ARHSEN00'
++    nam_rcv_flc(8) =  'ARUMOM00'
++    nam_rcv_flc(9) =  'ARVMOM00'
++    
++    
++    DO ji = 1, nfld_rcv_flc
++      nfld = nfld + nlev_rcv_flc(ji)
++    ENDDO
++  ENDIF
++
++  ! total number of fields to be received:
++  nfld_rcv_tot = nfld
++
++  IF ( debug_oasis > 15 .AND. my_cart_id == 0) THEN
++    WRITE(nulout,*) ' nfld_snd_tot=',nfld_snd_tot,' nfld_rcv_tot=',nfld_rcv_tot
++    CALL flush(nulout)
++  ENDIF
++
++! -----------------------------------------------------------------
++! ... write variables names for all active couplings to one structure
++! ----------------------------------------------------------------
++
++  ! Allocate memory for data exchange:
++  ALLOCATE( ssnd(nfld_snd_tot), stat = nerror )
++  ALLOCATE( srcv(nfld_rcv_tot), stat = nerror )
++  ALLOCATE( exfld1(ie, je), stat = nerror )
++
++  IF ( nerror > 0 ) THEN
++    CALL prism_abort_proto( ncomp_id, 'oas_cos_define', 'Failure in allocating exfld, ssnd or srcv' )
++    RETURN
++  ENDIF
++
++  ! fill ssnd with names of fields to be sent
++  nfld = 0  
++
++  IF ( ytype_oce == 'flxcl') THEN 
++    DO ji = 1, nfld_snd_flc
++      nfld = nfld + 1
++      ssnd(nfld)%clname = TRIM(nam_snd_flc(ji))
++    ENDDO
++  ENDIF
++
++  ! fill srcv with names of fields to be received:
++  nfld = 0
++
++  IF ( ytype_oce == 'flxcl') THEN 
++    DO ji = 1, nfld_rcv_flc
++      nfld = nfld + 1
++      srcv(nfld)%clname = TRIM(nam_rcv_flc(ji))
++    ENDDO
++  ENDIF
++
++! ----------------------------------------------------------------------------
++! ... Variable selection
++! ----------------------------------------------------------------------------
++
++  ! This is still preliminary: set laction for all (this way no subsets of
++  ! variables can be selected; this has to be changed yet)
++  ssnd(:)%laction = .TRUE.
++  srcv(:)%laction = .TRUE.
++
++  var_nodims(1) = 2   ! Dimension number of exchanged arrays
++  var_nodims(2) = 1   ! number of bundles (always 1 for OASIS3)
++
++! -----------------------------------------------------------------
++! ... Define the shape of the valid region without the halo and overlaps between CPUs
++! -----------------------------------------------------------------
++
++  ishape(1,1) = 1
++  ishape(2,1) = jih
++  ishape(1,2) = 1
++  ishape(2,2) = jjh
++
++! -----------------------------------------------------------------
++! ... Announce variables to be sent and to be received
++! -----------------------------------------------------------------
++
++  IF ( debug_oasis > 15 .AND. my_cart_id == 0) THEN
++    WRITE(nulout,*) ' ishape=',ishape,' id_part=',id_part
++    CALL flush(nulout)
++  ENDIF
++
++  ! Announce variables to be sent:
++  DO ji = 1, nfld_snd_tot
++    CALL prism_def_var_proto( ssnd(ji)%nid, ssnd(ji)%clname, id_part, &
++      var_nodims, PRISM_Out, ishape, PRISM_REAL, nerror )
++    IF ( nerror /= PRISM_Success ) CALL prism_abort_proto( ssnd(ji)%nid, &
++      'oas_cos_define', 'Failure in prism_def_var for '//TRIM(ssnd(ji)%clname) )
++  ENDDO
++      
++  ! Announce variables to be received:
++  DO ji = 1, nfld_rcv_tot
++    CALL prism_def_var_proto( srcv(ji)%nid, srcv(ji)%clname, id_part, &
++      var_nodims, PRISM_In, ishape, PRISM_REAL, nerror )
++    IF ( nerror /= PRISM_Success ) CALL prism_abort_proto( srcv(ji)%nid, &
++      'oas_cos_define', 'Failure in prism_def_var for '//TRIM(srcv(ji)%clname) )
++  ENDDO
++
++  ! Allocate array to store received fields between two coupling steps
++  ALLOCATE( frcv(ie, je, nfld_rcv_tot), stat = nerror )
++  IF ( nerror > 0 ) THEN
++    CALL prism_abort_proto( ncomp_id, 'oas_cos_define', 'Failure in allocating frcv' )
++    RETURN
++  ENDIF   
++
++! ------------------------------------------------------------------
++! ... End of definition phase (must be called by all processes including 
++!     the PEs not involved in the coupling)
++! ------------------------------------------------------------------
++       
++!write(*,*), "finished oasis var definition cclm"
++ 
++  CALL prism_enddef_proto( nerror )
++
++  IF ( nerror /= PRISM_Success ) CALL prism_abort_proto ( ncomp_id, &
++    'oas_cos_define', 'Failure in prism_enddef')
++
++  IF ( debug_oasis > 15 .AND. my_cart_id == 0) THEN
++    WRITE(nulout,*) ' oas_cos_define: end of definition phase'
++    CALL flush(nulout)
++  ENDIF
++  !write(*,*), "finished oasis_def cclm"
++
++! -----------------------------------------------------------------
++! ... Deallocate arrays that are not needed anymore
++! -----------------------------------------------------------------
++
++  
++  IF (ALLOCATED (nlev_snd_flc)) THEN
++    DEALLOCATE ( nlev_snd_flc, STAT=ierrstat )
++    DEALLOCATE ( nam_snd_flc , STAT=ierrstat )
++  ENDIF
++  
++  IF (ALLOCATED (nlev_rcv_flc)) THEN
++    DEALLOCATE ( nlev_rcv_flc, STAT=ierrstat )
++    DEALLOCATE ( nam_rcv_flc , STAT=ierrstat )
++  ENDIF
++
++ENDIF ! lpe_cpl 
++      
++CALL MPI_Barrier(kl_comm, nerror)
++
++END SUBROUTINE oas_cos_define
++
++!==============================================================================
++!+ reads the namelist for OASIS-/coupling-specific parameters
++!------------------------------------------------------------------------------
++
++SUBROUTINE read_namelist_oasis (ierror, yerrmsg)
++
++USE data_parallel,    ONLY : my_cart_id
++USE data_parameters,  ONLY : ireals, iintegers
++USE environment,      ONLY : model_abort, get_free_unit
++USE oas_cos_vardef,   ONLY : debug_oasis
++USE data_runcontrol,  ONLY : nuspecif
++
++IMPLICIT NONE
++
++
++INTEGER (KIND=iintegers), INTENT(OUT)           ::                      &
++  ierror       ! error status
++
++CHARACTER (LEN=  *),      INTENT(OUT)           ::                      &
++  yerrmsg      ! error message
++
++!------------------------------------------------------------------------------
++! local variables:
++INTEGER (KIND=iintegers)   ::   &
++  nuin,                         &
++  izerrstat
++
++CHARACTER (LEN=11)         ::   &
++  yinput             ! Namelist INPUT file
++
++!------------------------------------------------------------------------------
++!- End of header
++!------------------------------------------------------------------------------
++ 
++!------------------------------------------------------------------------------
++!- Begin Subroutine read_namelist_oasis
++!------------------------------------------------------------------------------
++
++ierror    = 0_iintegers
++izerrstat = 0_iintegers
++
++! -----------------------------------------------------------------
++! 1 Open NAMELIST-INPUT file
++! ----------------------------------------------------------------
++    
++IF (my_cart_id == 0) THEN
++
++   IF ( debug_oasis > 15 ) &
++     PRINT *,'    INPUT OF THE NAMELIST FOR COUPLING WITH OASIS3(-MCT)'
++
++  yinput   = 'INPUT_OASIS'
++  CALL get_free_unit (nuin)
++  OPEN (nuin, FILE=yinput, FORM='FORMATTED', STATUS='UNKNOWN',  &
++    IOSTAT=izerrstat)
++  IF (izerrstat /= 0) THEN
++    yerrmsg  = ' ERROR    *** Error while opening file INPUT_OASIS *** '
++    ierror   = 2
++    RETURN
++  ENDIF
++      
++ENDIF
++    
++! -----------------------------------------------------------------
++! 2 read the NAMELIST group oasisctl
++! ----------------------------------------------------------------
++
++CALL input_oasisctl (nuspecif, nuin, izerrstat)
++
++IF (izerrstat > 0) THEN
++  yerrmsg  = ' ERROR *** Wrong values occured in NAMELIST group /OASISCTL/ *** '
++  ierror   = 3
++  RETURN
++ELSEIF (izerrstat < 0) THEN
++  PRINT *, ' ERROR while reading NAMELIST group /OASISCTL/ in input_oasisctl '
++  ierror   = 4
++  RETURN
++ENDIF
++
++! -----------------------------------------------------------------
++! 3 Close NAMELIST-INPUT file
++! ----------------------------------------------------------------
++
++IF (my_cart_id == 0) THEN
++
++  CLOSE (nuin, STATUS='KEEP', IOSTAT=izerrstat)
++  IF (izerrstat /= 0) THEN
++    yerrmsg = ' ERROR *** while closing file INPUT_OASIS *** '
++    ierror  = 5
++  ENDIF
++
++  IF ( debug_oasis > 15 ) PRINT *, 'After closing INPUT_OASIS'
++ENDIF
++    
++!------------------------------------------------------------------------------
++!- End of the Subroutine
++!------------------------------------------------------------------------------
++
++END SUBROUTINE read_namelist_oasis
++  
++!==============================================================================
++!+ input of NAMELIST oasisctl
++!------------------------------------------------------------------------------
++
++SUBROUTINE input_oasisctl (nuspecif, nuin, ierrstat)
++
++!------------------------------------------------------------------------------
++!
++! Description:
++!
++! Method:
++!   All variables are initialized with default values and then read in from
++!   the file INPUT. The input values are checked for errors and for
++!   consistency. If wrong input values are detected the program prints
++!   an error message. The program is not stopped in this routine but an
++!   error code is returned to the calling routine that aborts the program after
++!   reading in all other namelists.
++!   In parallel mode, the variables are distributed to all nodes with the
++!   environment-routine distribute_values.
++!   Both, default and input values are written to the file YUSPECIF
++!   (specification of the run).
++!
++!------------------------------------------------------------------------------
++
++USE data_parallel,    ONLY : &
++  my_cart_id,      &
++  charbuf,         &            
++  intbuf,          &
++  logbuf,          &
++  realbuf,         &
++  nproc,           & ! total number of processors: nprocx * nprocy
++  imp_integers,    & ! determines the correct INTEGER type used in the
++                     ! model for MPI
++  imp_character,   & ! determines the correct CHARACTER type used in the
++                     ! model for MPI
++  imp_logical,     & ! determines the correct LOGICAL type used in the
++                     ! model for MPI
++  imp_reals,       & ! determines the correct REAL type used in the
++                     ! model for MPI
++  icomm_world        ! communicator that belongs to igroup_world, i.e.
++                     ! = MPI_COMM_WORLD
++
++USE data_parameters,  ONLY : &
++  ireals,          &
++  iintegers
++
++USE environment,      ONLY : &
++  model_abort
++
++USE parallel_utilities, ONLY: &
++  distribute_values
++
++USE data_modelconfig, ONLY : &
++  ke,               &
++  ie_tot,           &
++  je_tot
++
++USE oas_cos_vardef, ONLY : &
++  debug_oasis,      &
++  ytype_lsm,        &
++  ytype_oce,        &
++  CPL_FLG,          &
++  dt_cp
++
++IMPLICIT NONE
++
++! Parameter list:
++  INTEGER (KIND=iintegers), INTENT (IN)      ::        &
++    nuspecif,     & ! Unit number for protocolling the task
++    nuin            ! Unit number for Namelist INPUT file
++
++  INTEGER (KIND=iintegers), INTENT (INOUT)   ::        &
++    ierrstat        ! error status variable
++
++  CHARACTER (LEN=80)        ::                       &
++    yerrmsg            ! error message
++    
++! Local variables: 
++  INTEGER (KIND=iintegers)   ::  &
++    i, iz_err
++  
++  INTEGER (KIND=iintegers)   ::  &
++    debug_oasis_d,          &
++    dt_cp_d
++
++  REAL (KIND=ireals) :: &
++    CPL_FLG_d
++
++  CHARACTER (LEN=5) ::  &
++    ytype_lsm_d,  & ! type of Land Surface Model
++    ytype_oce_d     ! type of OCEAN Model
++! Define the namelist group
++  NAMELIST /oasisctl/ ytype_lsm, ytype_oce, debug_oasis, CPL_FLG, dt_cp
++                      
++!------------------------------------------------------------------------------
++!- End of header -
++!------------------------------------------------------------------------------
++
++!------------------------------------------------------------------------------
++!- Begin SUBROUTINE input_oasisctl
++!------------------------------------------------------------------------------
++
++ierrstat = 0_iintegers
++iz_err   = 0_iintegers
++
++IF ( ierrstat /= 0 ) THEN
++  PRINT *, ' ERROR    *** Error while allocating variables in routine input_oasisctl *** '
++  ierrstat   = 2
++  RETURN
++ENDIF
++
++!------------------------------------------------------------------------------
++!- Section 1: Initialize the default variables
++!------------------------------------------------------------------------------
++
++IF (my_cart_id == 0) THEN
++
++  ! general namelist parameters
++  ytype_lsm_d = 'terra'
++  ytype_oce_d = 'nooce'
++  debug_oasis_d = 0          ! no debug output per default
++  CPL_FLG_d = 0              ! no coupling
++  dt_cp_d = 600              ! default coupling time step
++
++                          
++!------------------------------------------------------------------------------
++!- Section 2: Initialize variables with defaults
++!------------------------------------------------------------------------------
++
++  ytype_lsm = ytype_lsm_d
++  ytype_oce = ytype_oce_d
++  debug_oasis = debug_oasis_d
++  CPL_FLG = CPL_FLG_d
++    dt_cp = dt_cp_d 
++
++!------------------------------------------------------------------------------
++!- Section 3: Input of the namelist values
++!------------------------------------------------------------------------------
++
++  READ (nuin, oasisctl, IOSTAT=iz_err)
++
++ENDIF ! my_cart_id
++
++IF (nproc > 1) THEN
++  ! distribute error status to all processors
++  CALL distribute_values  (iz_err, 1, 0, imp_integers, icomm_world, ierrstat)
++ENDIF
++
++IF (iz_err /= 0) THEN
++  ierrstat = -1
++  RETURN
++ENDIF
++
++IF (my_cart_id == 0) THEN
++
++!------------------------------------------------------------------------------
++!- Section 4: Check values for errors and consistency
++!------------------------------------------------------------------------------
++
++  IF ( ytype_lsm /= 'terra' ) THEN
++    PRINT *, ' ERROR  *** Wrong type of Land Surface Model *** :', ytype_lsm
++    ierrstat = 1002 
++  ENDIF
++  
++  IF ( ytype_oce /= 'flxcl' .AND. ytype_oce /= 'nooce' ) THEN
++    PRINT *, ' ERROR  *** Wrong type of ocean Model *** :', ytype_oce
++    ierrstat = 1002 
++  ENDIF
++
++  IF ( debug_oasis < 0 .OR. debug_oasis > 30 ) THEN
++    PRINT *, ' Warning  *** debug output for OASIS only for values between 16 and 30 *** '
++    ierrstat = 1002
++  ENDIF
++  
++
++  IF ( ierrstat /= 0 ) THEN
++    PRINT *, ' ERROR  *** Error while checking values of the namelist oasisctl *** '
++    RETURN
++  ENDIF
++
++ENDIF ! my_cart_id
++
++!------------------------------------------------------------------------------
++!- Section 5: Distribute variables to all nodes
++!------------------------------------------------------------------------------
++
++IF (nproc > 1) THEN
++
++  IF (my_cart_id == 0) THEN
++  
++    charbuf( 1) = ytype_lsm
++    charbuf( 2) = ytype_oce  
++
++    intbuf ( 1) = debug_oasis
++    intbuf ( 2) = CPL_FLG 
++    intbuf ( 3) = dt_cp 
++
++      
++  ENDIF ! my_cart_id == 0
++  
++  CALL distribute_values (charbuf , 2, 0, imp_character, icomm_world, ierrstat)
++  CALL distribute_values (intbuf  , 3, 0, imp_integers , icomm_world, ierrstat)
++
++  IF (my_cart_id /= 0) THEN
++
++    ytype_lsm = charbuf( 1)
++    ytype_oce = charbuf( 2)  
++
++    debug_oasis = intbuf ( 1)
++    CPL_FLG = intbuf (2)
++    dt_cp = intbuf (3)
++  
++  ENDIF ! my_cart_id == 0
++
++  IF ( ierrstat /= 0 ) THEN
++    PRINT *, ' ERROR *** in distributing buffers *** '
++    RETURN
++  ENDIF
++
++ENDIF ! nproc
++
++!------------------------------------------------------------------------------
++!- Section 6: Output of the namelist variables and their default values
++!------------------------------------------------------------------------------
++
++IF ( debug_oasis > 15 .AND. my_cart_id == 0) THEN
++  PRINT *, 'Writing NAMELIST to file'
++
++  WRITE (nuspecif, '(A2)')  '  '
++  WRITE (nuspecif, '(A25)') '     NAMELIST:  oasisctl'
++  WRITE (nuspecif, '(A25)') '     -------------------'
++  WRITE (nuspecif, '(A2)')  '  '
++  WRITE (nuspecif, '(T7,A,T26,A,T44,A,T63,A)')                               &
++    'Variable', 'Actual Value', 'Default Value', 'Format'
++
++  WRITE (nuspecif, '(T8,A, T27,A, T45,A, T64,A3)')                           &
++    'ytype_lsm', ytype_lsm, ytype_lsm_d, ' C ' 
++  WRITE (nuspecif, '(T8,A, T27,A, T45,A, T64,A3)')                           &
++    'ytype_oce', ytype_oce, ytype_oce_d, ' C ' 
++
++  WRITE (nuspecif, '(T8,A,T27,I12  ,T45,I12  ,T64,A3)')                      &                      
++    'debug_oasis', debug_oasis, debug_oasis_d, ' I '
++
++
++  WRITE (nuspecif, '(T8,A,T27,I12  ,T45,L12  ,T64,A3)')                      &                      
++    'CPL_FLG', CPL_FLG, CPL_FLG_d, ' L '
++
++  WRITE (nuspecif, '(T8,A,T27,I12  ,T45,L12  ,T64,A3)')                      &                      
++    'dt_cp', dt_cp, dt_cp_d, ' I '
++
++ENDIF ! my_cart_id
++
++
++!------------------------------------------------------------------------------
++!- End of the Subroutine
++!------------------------------------------------------------------------------
++
++END SUBROUTINE input_oasisctl 
++
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/oas_cos_finalize.f90 cclm/src/oas_cos_finalize.f90
+--- cclm-sp_2.0/src/cclm/src/oas_cos_finalize.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/oas_cos_finalize.f90	2023-07-25 16:08:58.613360500 +0200
+@@ -0,0 +1,33 @@
++#ifdef OASIS_IOW_ESM
++SUBROUTINE oas_cos_finalize
++
++!!---------------------------------------------------------------------
++!!              ***  ROUTINE oas_cos_finalize  ***
++!!
++!! ** Purpose : - Finalizes the coupling. If MPI_init has not been
++!!      called explicitly before oas_cos_init it will also close
++!!      MPI communication.
++!!----------------------------------------------------------------------
++
++USE oas_cos_vardef
++
++USE data_parameters,  ONLY : &
++  iintegers
++
++IMPLICIT NONE
++
++! local variables
++INTEGER(KIND=iintegers) :: &
++  ierrstat
++
++
++IF ( lpe_cpl ) THEN
++  DEALLOCATE( exfld1, frcv, ssnd, srcv, STAT=ierrstat )
++ENDIF
++
++CALL prism_terminate_proto ( nerror )         
++IF ( debug_oasis > 0 ) WRITE(nulout,*) 'Call prism_terminate_proto in COSMO-CLM'
++CALL flush(nulout)
++
++END SUBROUTINE oas_cos_finalize
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/oas_cos_init.f90 cclm/src/oas_cos_init.f90
+--- cclm-sp_2.0/src/cclm/src/oas_cos_init.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/oas_cos_init.f90	2023-07-25 16:08:58.614342100 +0200
+@@ -0,0 +1,72 @@
++#ifdef OASIS_IOW_ESM
++SUBROUTINE oas_cos_init 
++
++!**** *INIOASIS*  - Initialize coupled mode communication
++!
++!     Purpose.
++!     --------
++!     Initialize coupler to get the MPI communicator
++!
++!**   Interface.
++!     ----------
++!       *CALL*  *oas_cos_init*
++!
++!     Input:
++!     -----
++!
++!     Output:
++!     ------
++!       MPLUSERCOMM in MPL_MODULE is updated.
++!
++!     Method:
++!     ------
++!       OASIS usage is controlled by environment variables
++!
++!     Externals:
++!     ---------
++!       GETENV - Get enviroment variables
++!       prism_init, prism_init_comp, prism_get_localcomm, prism_abort : prism library
++!
++!     Reference:
++!     ---------
++!       S. Valcke, R. Redler, 2007: OASIS4 User Guide ,
++!       PRISM Support Initiative Report No 4,
++!       CERFACS, Toulouse, France, 60 pp.
++!
++!     Author:
++!     -------
++!       R. Redler, NEC Laboratories Europe
++!       K. Mogensen, ECMWF
++!
++!     Modifications.
++!     --------------
++!       E. Maisonnave : adapted to COSMO
++!       A. Dobler: adapted to OASIS3
++!
++
++USE oas_cos_vardef
++
++IMPLICIT NONE
++   
++CHARACTER(LEN=6)   :: modname = 'cosmoc'    ! Name of the model
++
++      
++!------------------------------------------------------------------
++! 1) Initialize the PRISM system for the component
++!------------------------------------------------------------------
++CALL prism_init_comp_proto( ncomp_id, modname, nerror )
++IF( nerror /= PRISM_Success ) THEN
++  CALL prism_abort_proto( ncomp_id, 'oas_cos_init', 'Failure in prism_init_comp' )
++ENDIF
++
++!------------------------------------------------------------------
++! 2) Get an MPI communicator for COSMO local communication
++!------------------------------------------------------------------
++
++CALL prism_get_localcomm_proto( kl_comm, nerror )
++IF( nerror /= PRISM_Success ) THEN
++  CALL prism_abort_proto( ncomp_id, 'oas_cos_init', 'Failure in prism_get_localcomm' )
++ENDIF
++
++END SUBROUTINE oas_cos_init
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/oas_cos_rcv.f90 cclm/src/oas_cos_rcv.f90
+--- cclm-sp_2.0/src/cclm/src/oas_cos_rcv.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/oas_cos_rcv.f90	2023-07-25 16:08:58.616268400 +0200
+@@ -0,0 +1,106 @@
++#ifdef OASIS_IOW_ESM
++SUBROUTINE oas_cos_rcv( kid, kstep, pdata, kinfo )
++
++!!---------------------------------------------------------------------
++!!              ***  ROUTINE oas_cos_rcv  ***
++!!
++!! ** Purpose : - At each coupling time-step,this routine call fields
++!!                from the coupler or remote application.
++!!----------------------------------------------------------------------
++
++USE data_parameters,    ONLY : & 
++  ireals,                      &
++  iintegers
++
++USE data_modelconfig,   ONLY : &
++  ie,                          &
++  je
++
++USE data_parallel,      ONLY : &
++  my_cart_id
++
++USE oas_cos_vardef
++
++IMPLICIT NONE
++
++INTEGER(kind=iintegers), INTENT(IN)   :: &
++  kid    ! variable index in the array
++
++INTEGER(kind=iintegers), INTENT(IN)   :: &
++  kstep  ! time-step in seconds
++
++REAL(kind=ireals), INTENT(OUT)        :: &
++  pdata(ie,je)
++
++INTEGER(kind=iintegers), INTENT(OUT)  :: &
++  kinfo  ! OASIS info argument
++
++!!
++!! local variables
++!!
++LOGICAL :: &
++  llaction
++!!--------------------------------------------------------------------
++
++!  Masked points are not modified by OASIS
++!  = buffer set to 0 before calling OASIS
++!SW 2013-10-21
++!exfld(:,:) = 0.0_ireals
++exfld1(:,:) = 0.0_ireals
++!SW end
++
++IF (lpe_cpl) THEN
++
++  ! receive local data from OASIS on every process involved in the coupling
++!SW 2013-10-21
++!  CALL prism_get_proto ( srcv(kid)%nid, kstep, exfld(nldi:nlei, nldj:nlej), kinfo )   
++#ifdef IOW_ESM_DEBUG  
++  WRITE(*,*) 'BEFORE prism_get_proto'
++#endif
++  CALL prism_get_proto ( srcv(kid)%nid, kstep, exfld1(nldi:nlei, nldj:nlej), kinfo ) 
++#ifdef IOW_ESM_DEBUG        
++  WRITE(*,*) 'AFTER prism_get_proto'
++#endif
++!SW end
++  IF ( nerror /= PRISM_Success) THEN
++    CALL prism_abort_proto( srcv(kid)%nid, 'oas_cos_rcv', &
++      'Failure in prism_get_proto for '//TRIM(srcv(kid)%clname) )
++  ENDIF
++
++  llaction = .false.
++  IF( kinfo == PRISM_Recvd   .OR. kinfo == PRISM_FromRest .OR.   &
++      kinfo == PRISM_RecvOut .OR. kinfo == PRISM_FromRestOut .OR. kinfo == PRISM_Input)   llaction = .TRUE.
++       
++  ! If coupling time step
++  IF ( llaction ) THEN
++
++    ! Declare to calling routine that OASIS provided coupling field
++    kinfo = OASIS_Rcv
++
++    ! Update array which contains coupling field (only on valid shape)
++!SW 2013-10-21
++!     pdata(nldi:nlei, nldj:nlej) = exfld(nldi:nlei, nldj:nlej)
++     pdata(nldi:nlei, nldj:nlej) = exfld1(nldi:nlei, nldj:nlej)
++!SW end
++
++    IF ( debug_oasis > 15 ) THEN
++      WRITE(nulout,*) '************ in oas_cos_rcv *********'
++      WRITE(nulout,*) 'prism_get_proto: Incoming ', srcv(kid)%clname
++      WRITE(nulout,*) 'prism_get_proto: ivarid '  , srcv(kid)%nid
++      WRITE(nulout,*) 'prism_get_proto:   kstep', kstep
++      WRITE(nulout,*) 'prism_get_proto:   info ', kinfo
++      WRITE(nulout,*) '     - Minimum value is ', MINVAL(pdata)
++      WRITE(nulout,*) '     - Maximum value is ', MAXVAL(pdata)
++      WRITE(nulout,*) '     -     Sum value is ', SUM(pdata)
++      WRITE(nulout,*) '*************************************'
++      CALL flush(nulout)
++    ENDIF
++  ELSE
++    ! Declare to calling routine that OASIS did not provide coupling field
++    kinfo = OASIS_idle     
++  ENDIF
++
++ENDIF ! lpe_cpl
++
++END SUBROUTINE oas_cos_rcv
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/oas_cos_snd.f90 cclm/src/oas_cos_snd.f90
+--- cclm-sp_2.0/src/cclm/src/oas_cos_snd.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/oas_cos_snd.f90	2023-07-25 16:08:58.617246000 +0200
+@@ -0,0 +1,77 @@
++#ifdef OASIS_IOW_ESM
++SUBROUTINE oas_cos_snd( kid, kstep, pdata1, kinfo)
++
++!!---------------------------------------------------------------------
++!!              ***  ROUTINE oas_cos_snd  ***
++!!
++!! ** Purpose : - At each coupling time-step,this routine sends fields
++!!                to the coupler or remote application.
++!!----------------------------------------------------------------------
++
++USE data_parameters,  ONLY : &
++  ireals,                    &
++  iintegers
++
++USE data_modelconfig, ONLY : &
++  ie,                        &
++  je
++
++USE data_parallel,    ONLY : &
++  my_cart_id
++
++USE oas_cos_vardef
++
++IMPLICIT NONE
++
++!! * Arguments
++!!
++INTEGER(KIND=iintegers), INTENT(IN)    ::  &
++  kid    ! variable index in the array
++
++INTEGER(KIND=iintegers), INTENT(OUT)   ::  &
++  kinfo  ! OASIS info argument
++
++INTEGER(KIND=iintegers), INTENT(IN)    ::  &
++  kstep  ! time-step in seconds
++
++REAL(KIND=ireals), INTENT(IN)          ::  &
++  pdata1(ie,je)
++
++
++
++!!
++!! * Local variables
++!!
++!!
++!!--------------------------------------------------------------------
++!
++IF ( lpe_cpl ) THEN
++  !
++  !
++  ! prepare array (only valid shape, without halos) for OASIS
++  !
++
++
++  exfld1(nldi:nlei, nldj:nlej) = pdata1(nldi:nlei, nldj:nlej)
++
++ IF ( debug_oasis > 15 ) THEN
++    WRITE(nulout,*) '************ in oas_cos_snd *********'
++    WRITE(nulout,*) 'prism_put: Incoming ', ssnd(kid)%clname
++    WRITE(nulout,*) 'prism_put: ivarid '  , ssnd(kid)%nid
++    WRITE(nulout,*) 'prism_put:   kstep', kstep
++    WRITE(nulout,*) '     - Minimum value is ', MINVAL(exfld1(nldi:nlei, nldj:nlej))
++    WRITE(nulout,*) '     - Maximum value is ', MAXVAL(exfld1(nldi:nlei, nldj:nlej))
++    WRITE(nulout,*) '     -     Sum value is ', SUM(exfld1(nldi:nlei, nldj:nlej))
++    WRITE(nulout,*) '*************************************'
++    CALL flush(nulout)
++  ENDIF
++
++  ! Call OASIS at each time step but field is sent to other model only at coupling time step
++  ! (accumulation otherwise, if asked in the namcouple configuration file)
++  !
++  CALL prism_put_proto( ssnd(kid)%nid, kstep, exfld1(nldi:nlei, nldj:nlej), kinfo)
++
++ENDIF ! lpe_cpl
++
++END SUBROUTINE oas_cos_snd
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/oas_cos_vardef.f90 cclm/src/oas_cos_vardef.f90
+--- cclm-sp_2.0/src/cclm/src/oas_cos_vardef.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/oas_cos_vardef.f90	2023-07-25 16:08:58.618223200 +0200
+@@ -0,0 +1,110 @@
++#ifdef OASIS_IOW_ESM
++MODULE oas_cos_vardef
++
++!**** *oas_cos_vardef * - Controls, definitions and variables
++!                   for OASIS communications
++!
++!     AUTHOR.
++!     -------
++!     2007-1-30 Kristian Mogensen
++!
++!     MODIFICATIONS.
++!     --------------
++!     2010-3  Eric Maisonnave: OASIS4
++!     2010-11 Eric Maisonnave: COSMO-CLM coupling
++!       A. Dobler: adapted to OASIS3
++!     2012-08: unified interface for OASIS - COSMO/CLM, Will/Davin/Brauch 
++!****
++
++USE data_parameters,     ONLY: &
++  ireals,             &
++  iintegers
++
++USE mpi
++USE mod_prism
++
++
++IMPLICIT NONE
++
++SAVE
++
++! Debug level of OASIS
++!     0 : Minimum debugging
++!     1 : Debugging
++!     2 : Perfs measurement
++!     3 : OASIS restart production
++
++INTEGER(KIND=iintegers) :: &
++  debug_oasis,             & ! Debug level of OASIS
++  kl_comm, nerror,            & ! Local communicator
++  nldi,nlei,nldj,nlej,     & ! halo limits on a local subdomain
++  jih,jjh,                 & ! subdomain limit
++  iboundstart,jboundstart,  & ! boundline limits limit
++  ncomp_id                 ! id returned by prism_init_comp   
++
++INTEGER(KIND=iintegers) :: &
++  OASIS_Rcv  = 1,          & ! return code if received field
++  OASIS_idle = 0,          & ! return code if nothing was done by OASIS
++  PRISM_Success = 0          ! return code if no error in OASIS
++
++INTEGER(KIND=iintegers) :: &
++  nulout=6                   ! unit number for joblog file
++
++TYPE :: FLD_CPL                        ! Type for coupling field information
++  LOGICAL                 :: laction   ! To be coupled or not
++  CHARACTER(LEN = 16)      :: clname    ! Name of the coupling field
++  CHARACTER(LEN = 1)      :: clgrid    ! Grid type
++  INTEGER(KIND=iintegers) :: nid       ! Id of the field
++END TYPE FLD_CPL
++
++TYPE(FLD_CPL), ALLOCATABLE :: &
++  srcv(:),                 & ! All fields to be received
++  ssnd(:)                    ! All fields to be sent
++
++REAL(KIND=ireals), ALLOCATABLE :: &
++  exfld1 (:,:),             & ! Temporary buffer for receiving
++  frcv  (:,:,:)                ! all fields recieved from coupled model
++
++REAL(KIND=ireals), ALLOCATABLE :: &
++  zmask_tot (:,:)  !sandra mask should be visible in complete module 12092018 
++
++REAL(KIND=ireals), ALLOCATABLE :: &
++  zmask     (:,:),        &  ! sandra mask should be visible in complete module 12092018
++  zmask_u     (:,:),        &  
++  zmask_v    (:,:),        &  
++  fmask     (:,:),        &  ! mask with float number corresponding to coupled fraction of atmospheric grid cell (t grid)
++  fmask_u     (:,:),        &  ! mask with float number corresponding to coupled fraction of atmospheric grid cell (u grid)
++  fmask_v     (:,:),        &  ! mask with float number corresponding to coupled fraction of atmospheric grid cell (v grid)
++  fmask_tot (:,:) 
++
++LOGICAL :: &
++  lpe_cpl = .FALSE.
++
++CHARACTER(LEN= 5) ::       &
++  ytype_lsm,               & ! type of Land Surface Model:
++                             ! 'terra' (default)
++                             ! 'clmXX' = Community Land Model of version XX
++  ytype_oce                  ! type of Ocean Model
++                             ! 'nooce' = no coupled ocean (default)
++                             ! 'flxcl' = Coupling to IOW_ESM flux_calculator
++
++INTEGER(KIND=iintegers) :: &
++  nfld,                    & !
++  nfld_snd_tot,            & ! total number of fields to be sent
++  nfld_rcv_tot,            & ! total number of fields to be received
++  nfld_snd_flc,            & ! number of fields to be sent to flux calculator
++  nfld_rcv_flc,            & ! number of fields to be received from flux calculator
++  nfld_rcv_flc_early,      & ! how many of these are fetched before radiation and precipitation calculation
++  dt_cp,                   & ! coupling time step
++  CPL_FLG                    ! coupling flag: 1.0 means coupled, 0.0 not
++
++INTEGER(KIND=iintegers), ALLOCATABLE :: &
++  nlev_snd_flc(:),         & ! number of levels per field to be sent to flux calculator
++  nlev_rcv_flc(:)            ! number of levels per field to be received from flux calculator
++
++CHARACTER(LEN=16), ALLOCATABLE :: &
++  nam_snd_flc(:),          & ! names of fields to be sent to flux calculator
++  nam_rcv_flc(:)             ! names of fields to be received from flux calculator
++
++END MODULE oas_cos_vardef
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/organize_physics.f90 cclm/src/organize_physics.f90
+--- cclm-sp_2.0/src/cclm/src/organize_physics.f90	2015-09-21 16:13:47.000000000 +0200
++++ cclm/src/organize_physics.f90	2023-07-25 16:08:58.635250200 +0200
+@@ -1684,2 +1684,3 @@
+       CALL terra_multlay (yzerror, izerr)
++
+     ELSE
+@@ -1935,2 +1936,10 @@
+ 
++#ifdef OASIS_IOW_ESM
++  !----------------------------------------------------------------------------
++  ! Section 3.8.1: Send fields + some fluxes to flux calculator
++  !                Receive other fluxes and update them
++  !----------------------------------------------------------------------------
++  CALL send_fld
++#endif
++
+   !----------------------------------------------------------------------------
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/receive_fld.f90 cclm/src/receive_fld.f90
+--- cclm-sp_2.0/src/cclm/src/receive_fld.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/receive_fld.f90	2023-07-25 16:08:58.651107400 +0200
+@@ -0,0 +1,210 @@
++#IFDEF OASIS_IOW_ESM
++SUBROUTINE receive_fld
++
++!!---------------------------------------------------------------------
++!!              ***  ROUTINE receive_fld  ***
++!!
++!! ** Purpose : - Prepare and receive coupling fields to OASIS
++!!    
++!!----------------------------------------------------------------------
++
++USE oas_cos_vardef
++
++USE data_modelconfig, ONLY : &
++  dt,              &
++  ie, je,          & 
++  idt_qv
++
++USE data_parameters,  ONLY : &
++  ireals,          &
++  iintegers
++
++USE data_parallel,    ONLY : & 
++  my_cart_id
++
++USE environment,      ONLY : &
++  model_abort
++
++USE data_runcontrol , ONLY : &
++  nnow  ,         & ! corresponds to ntstep
++  nnew  ,         & ! corresponds to ntstep + 1
++  ntstep,         & !
++  nstart,         & ! first time step of the forecast
++  ltime
++
++USE data_constants,   ONLY : &
++  sigma             ! Boltzmann-constant
++
++USE data_soil,        ONLY : &
++  ctalb       ! thermal albedo (1-emissivity) ?!
++
++USE data_fields,      ONLY : &                        
++  zalso_flc  ,    & ! averaged surface albedo for shortwave radiation from flux calculator ( )
++  !    fields for surface values and soil model variables               (unit )
++  ! -----------------------------------------------------
++  t_g       ,     & ! weighted surface temperature                  (  K  )
++  t_g_rad   ,     & ! weighted surface temperature for radiation    (  K  )
++  t_s       ,     & ! temperature of the ground surface             (  k  )
++  fr_ice            ! ice fraction 
++
++USE MPI, only: MPI_BARRIER, MPI_COMM_WORLD
++
++USE time_utilities,   ONLY : &
++  get_timings,      & 
++  i_cpl_add_comp,   &
++  i_cpl_get
++
++USE src_tracer,      ONLY : trcr_get, trcr_errorstr
++
++IMPLICIT NONE
++
++!
++! local parameters, variables and arrays
++!
++
++INTEGER(KIND=iintegers) :: &
++  isec,               &
++  jn,                 &
++  i, j, k, n, dummy,  &
++  izerror
++
++INTEGER(KIND=iintegers) :: &
++  nrcvinfo(nfld_rcv_tot)  ! OASIS info argument
++
++INTEGER(KIND=4)         :: &
++  mask(nlei-nldi+1,nlej-nldj+1) ! mask array
++
++REAL(KIND=ireals)      :: &
++  ztmp1  (ie,je)
++  
++CHARACTER(LEN=200)      :: &
++  yzerrmsg               ! error message for error handling
++
++CHARACTER (LEN=25)       :: & 
++  yzroutine
++
++REAL (KIND=ireals), POINTER :: &
++    qv_now     (:,:,:)   => NULL() !, &     ! QV at nx
++
++!------------------------------------------------------------------------------
++!- End of header
++!------------------------------------------------------------------------------
++
++!------------------------------------------------------------------------------
++! 1. Attribute fields to received fields (independent of the specific coupling) 
++!-------------------------------------------------------------------------------
++
++
++   izerror  = 0_iintegers
++   yzerrmsg = ''
++   yzroutine= 'receive_fld'
++
++   CALL trcr_get(izerror, idt_qv, ptr_tlev = nnow, ptr = qv_now)
++   IF (izerror /= 0) THEN
++      yzerrmsg = trcr_errorstr(izerror)
++      CALL model_abort(my_cart_id, izerror, yzerrmsg, yzroutine)
++   ENDIF
++
++! Coupling only with PEs that contain at least one land point
++IF ( lpe_cpl ) THEN
++
++  nrcvinfo (:) = OASIS_idle
++  ztmp1 (:,:) = 0.0_ireals
++
++  isec = nint ( ( ntstep - nstart ) * dt )
++
++  IF (  debug_oasis > 15 .AND. my_cart_id == 0 ) THEN
++    WRITE(nulout,*) 'in receive_fld: ntstep=',ntstep,' isec=',isec
++  ENDIF
++
++  IF (ltime) CALL get_timings (i_cpl_add_comp, ntstep, dt, izerror)
++
++  IF (MOD(isec,dt_cp)==0) THEN  ! coupling time step
++    CALL MPI_BARRIER(MPI_COMM_WORLD,dummy)
++  ENDIF
++
++!------------------------------------------------------------------------------
++! 2. Receive all coupling fields (independent of the specific coupling) 
++!-------------------------------------------------------------------------------
++  IF( ytype_oce == 'flxcl' .AND. lpe_cpl ) THEN
++    ! 1) Receive early fields from flux calculator
++    DO jn = 1, nfld_rcv_flc_early
++      
++#ifdef IOW_ESM_DEBUG
++      WRITE(*,*) 'calling oas_cos_rcv for field jn=',jn,' from flux calculator.'
++#endif
++      CALL oas_cos_rcv( jn, isec, ztmp1(:,:), nrcvinfo(jn) )
++      IF( nrcvinfo(jn) == OASIS_Rcv ) THEN
++        frcv(:,:,jn)=ztmp1(:,:)
++#ifdef IOW_ESM_DEBUG
++        WRITE(*,*) 'CCLM received field jn=',jn,' from flux calculator.'
++#endif
++      ENDIF
++#ifdef IOW_ESM_DEBUG
++      WRITE(*,*) 'finished calling oas_cos_rcv for field jn=',jn,' from flux calculator.'
++#endif
++    ENDDO
++  ENDIF
++
++ENDIF ! lpe_cpl
++
++IF (ltime) CALL get_timings (i_cpl_get, ntstep, dt, izerror)
++
++IF( lpe_cpl ) THEN
++  IF( ytype_oce == 'flxcl') THEN
++  
++    ! 1) Process early fields from flux calculator
++    mask = INT(zmask(nldi:nlei,nldj:nlej))
++
++    jn = 0
++
++    ! Update non-masked t_s with frcv array
++    ! SST index
++    jn = jn + 1   ! surface temperature
++    IF( srcv(jn)%laction ) THEN 
++    IF(CPL_FLG .gt. 0) THEN    
++      WHERE (mask == 0) t_s(nldi:nlei,nldj:nlej,nnow) = (1.0_ireals - fmask(nldi:nlei,nldj:nlej))*frcv(nldi:nlei,nldj:nlej,jn) + t_s(nldi:nlei,nldj:nlej,nnow)*fmask(nldi:nlei,nldj:nlej)
++      WHERE (mask == 0) t_s(nldi:nlei,nldj:nlej,nnew) = (1.0_ireals - fmask(nldi:nlei,nldj:nlej))*frcv(nldi:nlei,nldj:nlej,jn) + t_s(nldi:nlei,nldj:nlej,nnew)*fmask(nldi:nlei,nldj:nlej)
++    ENDIF
++    ENDIF
++
++    jn = jn + 1   ! blackbody radiation => convert back to radiative temperature
++    IF( srcv(jn)%laction ) THEN 
++    IF(CPL_FLG .gt. 0) THEN   
++      WHERE (mask == 0) 
++        t_g_rad(nldi:nlei,nldj:nlej,nnow) = (1.0_ireals - fmask(nldi:nlei,nldj:nlej))*frcv(nldi:nlei,nldj:nlej,jn) + fmask(nldi:nlei,nldj:nlej) * sigma * t_g(nldi:nlei,nldj:nlej,nnow)**4 
++        t_g_rad(nldi:nlei,nldj:nlej,nnew) = (1.0_ireals - fmask(nldi:nlei,nldj:nlej))*frcv(nldi:nlei,nldj:nlej,jn) + fmask(nldi:nlei,nldj:nlej) * sigma * t_g(nldi:nlei,nldj:nlej,nnew)**4 
++        t_g_rad(nldi:nlei,nldj:nlej,nnow) = (t_g_rad(nldi:nlei,nldj:nlej,nnow) / sigma)**0.25 ! TODO: think about using zalth (thermal albedo of surface) here
++        t_g_rad(nldi:nlei,nldj:nlej,nnew) = (t_g_rad(nldi:nlei,nldj:nlej,nnew) / sigma)**0.25
++      ELSEWHERE
++        t_g_rad(nldi:nlei,nldj:nlej,nnow) = t_g(nldi:nlei,nldj:nlej,nnow)
++        t_g_rad(nldi:nlei,nldj:nlej,nnew) = t_g(nldi:nlei,nldj:nlej,nnew)
++      ENDWHERE
++    ENDIF
++    ENDIF
++
++    jn = jn + 1 ! FICE fraction of ice
++    IF( srcv(jn)%laction ) THEN
++    IF(CPL_FLG .gt. 0) THEN
++      WHERE (mask == 0) fr_ice(nldi:nlei,nldj:nlej) = frcv(nldi:nlei,nldj:nlej,jn)
++    ENDIF
++    ENDIF
++
++    jn = jn + 1 ! ALBE averaged surface albedo for shortwave radiation
++    IF( srcv(jn)%laction ) THEN
++    IF(CPL_FLG .gt. 0) THEN
++      WHERE (mask == 0) 
++        zalso_flc(nldi:nlei,nldj:nlej) = frcv(nldi:nlei,nldj:nlej,jn)
++      ELSEWHERE
++        zalso_flc(nldi:nlei,nldj:nlej) = -1.0
++      ENDWHERE
++    ENDIF
++    ENDIF
++  
++  ENDIF ! ytype_oce == 'flxcl'
++ENDIF ! lpe_cpl
++
++IF (ltime) CALL get_timings (i_cpl_add_comp, ntstep, dt, izerror)
++
++END SUBROUTINE receive_fld
++#endif
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/send_fld.f90 cclm/src/send_fld.f90
+--- cclm-sp_2.0/src/cclm/src/send_fld.f90	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/send_fld.f90	2023-07-25 16:08:58.656214800 +0200
+@@ -0,0 +1,521 @@
++#ifdef OASIS_IOW_ESM
++SUBROUTINE send_fld
++
++!!---------------------------------------------------------------------
++!!              ***  ROUTINE send_fld  ***
++!!
++!! ** Purpose : Prepare and send coupling fields to OASIS
++!!      
++!!----------------------------------------------------------------------
++
++USE oas_cos_vardef
++
++USE data_runcontrol,  ONLY : &
++  ntstep,        &
++  nnow,          &
++  nstart,        &
++  ltime
++
++USE data_modelconfig, ONLY : &
++  ke, ie, je,    &
++  dt,            &
++  pollon,        &
++  pollat,        &
++  idt_qv,        &
++  dlon, dlat
++
++USE data_parameters,  ONLY : &
++  ireals,        &
++  iintegers
++
++USE data_parallel,      ONLY :  &
++  my_cart_id     ! rank of this subdomain in the cartesian communicator
++
++USE data_fields,      ONLY : &
++  ! 1. constant fields for the reference atmosphere                     (unit)
++  ! -----------------------------------------------
++  p0        ,    & ! base state pressure                           (Pa)
++  ! 3. prognostic variables                                             (unit)
++  ! -----------------------
++  u         ,    & ! zonal wind speed                              ( m/s )
++  v         ,    & ! meridional wind speed                         ( m/s )
++  t         ,    & ! temperature                                   (  k  )
++  pp        ,    & ! deviation from the reference pressure         ( pa  )
++  ! 6. fields that are computed in the parametrization and dynamics     (unit )
++  ! ---------------------------------------------------------------
++  !   fields of convective and grid-scale precipitation
++  prr_con    ,   & ! precipitation rate of rain, convective        (kg/m2*s)
++  prs_con    ,   & ! precipitation rate of snow, convective        (kg/m2*s)
++  prr_gsp    ,   & ! precipitation rate of rain, grid-scale        (kg/m2*s)
++  prs_gsp    ,   & ! precipitation rate of snow, grid-scale        (kg/m2*s)
++  prg_gsp    ,   & ! precipitation rate of graupel, grid-scale     (kg/m2*s)
++  !   fields of the radiation
++  swdir_s     ,   & ! direct shortwave downward radiation           ( W/m2)
++  swdifd_s    ,   & ! diffuse shortwave downward radiation          ( W/m2) 
++  swdifu_s    ,   & ! diffuse shortwave upward radiation            ( W/m2) 
++  lwu_s       ,   & ! thermal upward radiation at the ground        ( W/m2)
++  lwd_s       ,   & ! thermal downward radiation at the ground      ( W/m2)
++  
++  qvsflx      ,   & ! moisture flux 
++  
++  lhfl_s      ,   & ! latent heat flux (surface)                    ( W/m2)
++  shfl_s      ,   & ! sensible heat flux (surface)                  ( W/m2)
++  !   momentum
++  umfl_s      ,   & ! u-momentum flux (surface)                     ( N/m2)
++  vmfl_s      ,   & ! v-momentum flux (surface)                     ( N/m2)
++
++  ps          ,   & ! surface pressure
++ 
++  rlon        ,   & ! geographical longitude
++  rlat        ,   & ! geographical latitude
++
++  u_10m       ,   & ! zonal wind at 10m                      ( m/s )
++  v_10m       ,   & ! meridional wind at 10m                 ( m/s )
++  
++  tch         ,   & ! turbulent transfer coefficient for heat       (1)
++  tcm         ,   & ! turbulent transfer coefficient for momentum   (1)
++  zalso_flc, & ! shortwave albedo from flux calculator
++  llandmask
++
++
++USE netcdf
++
++USE time_utilities,   ONLY : & 
++  get_timings,       & 
++  i_cpl_put
++
++USE src_tracer,      ONLY : trcr_get, trcr_errorstr
++
++USE environment,      ONLY : model_abort
++
++USE utilities,  ONLY : & 
++  uvrot2uv_vec
++
++IMPLICIT NONE
++
++INTEGER(KIND=iintegers) :: &
++  isec,            &
++  kinfo,           &
++  ierror,          &
++  jn,      &
++  i, j, k,         &
++  ii, jj,          &
++  izerror
++
++
++INTEGER(KIND=iintegers) :: &
++  im1, ip1, jm1, jp1,      &
++  left, right, bottom, top,&
++  istatus,                 &
++  ncfileid, ncvarid,       &
++  nrcvinfo(nfld_rcv_tot)  ! OASIS info argument
++  
++INTEGER(KIND=4)         :: &
++  mask(nlei-nldi+1,nlej-nldj+1), & ! mask array
++  mask_u(nlei-nldi+1,nlej-nldj+1), & ! mask array
++  mask_v(nlei-nldi+1,nlej-nldj+1) ! mask array
++
++REAL(KIND=ireals)      :: &
++  ! Shepard interpolation for sent fields tcm and tch
++  c, &     ! sum of weights
++  w        ! weight for nighbor cells for Shepard interoplation
++
++REAL(KIND=ireals)      :: &
++  ztmp1  (ie,je),         &
++  ztmp2  (ie,je)
++
++CHARACTER (LEN=80)      :: &
++  yzerrmsg
++
++CHARACTER (LEN=25)       :: yzroutine
++
++REAL (KIND=ireals), POINTER :: &
++  qv_now     (:,:,:)   => NULL()! , &     ! QV at nx
++
++!------------------------------------------------------------------------------
++!- End of header
++!------------------------------------------------------------------------------
++
++  izerror = 0_iintegers   
++  yzerrmsg = ''
++  yzroutine= 'send_fld'
++
++ ! Retrieve the required microphysics tracers
++  CALL trcr_get(izerror, idt_qv,  ptr_tlev = nnow, ptr = qv_now)
++  IF (izerror /= 0) THEN
++    yzerrmsg = trcr_errorstr(izerror)
++    CALL model_abort(my_cart_id, izerror, yzerrmsg, yzroutine)
++  ENDIF
++
++!----------------------------------------------------------------------------
++! 1 coupling-specific handling of sent fields
++!----------------------------------------------------------------------------
++
++! Coupling only on PE with at least one unmasked grid point
++IF ( lpe_cpl ) THEN
++
++  isec = nint( (ntstep - nstart ) * dt )
++
++  IF ( debug_oasis > 15 .AND. my_cart_id == 0 ) THEN
++    WRITE(nulout,*) 'in send_fld: ntstep=',ntstep,' isec=',isec
++  ENDIF
++
++!----------------------------------------------------------------------------
++! 1.6 IOW_ESM-specific handling of sent fields
++!----------------------------------------------------------------------------
++  IF ( ytype_oce == 'flxcl' ) THEN 
++    ! We will first send variables to the flux calculator and then read in the calculated fluxes.
++    ! First send...
++    jn = 0
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=t(:,:,ke,nnow)
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Atmposheric temperature in lowest cell ASTATM00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=pp(:, :, ke, nnow) + p0(:, :, ke)        
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Atmospheric pressure in lowest cell ASPATM00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=ps(:,:,nnow)          
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Surface pressure ASPSUR00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:) = -(prr_con(:,:) + prr_gsp(:,:))
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Massflux rain ASMRAI00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:) = -(prs_con(:,:) + prs_gsp(:,:))                   
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Massflux snow ASMSNO00 
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:) = -lwd_s(:,:)          
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Radiation longwave downward ASRLWD00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:) = lwu_s(:,:)                    
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Radiation longwave upward ASRLWU00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=-swdir_s(:,:)          
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Radiation shortwave direct downward ASRSDD00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)= - swdifd_s(:,:) !swdifu_s(:,:) - swdifd_s(:,:)          
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)   ! Radiation shortwave indirect net flux ASRSIN00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:) = u_10m(:,:)
++      ztmp2(:,:) = v_10m(:,:)
++      CALL uvrot2uv_vec(ztmp1,ztmp2,rlat,rlon,pollat,pollon,ie,je)
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Eastward 10m wind ASU10M00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      WHERE (zmask /= 0) ztmp2(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp2, kinfo)  ! Northward 10m wind ASV10M00
++    ENDIF
++    
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=tch(:,:)
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++
++      ! process coefficient before sending
++      DO j = nldj,nlej
++        DO i = nldi,nlei
++          ! if there is a coupled cell that is also markes as land, we don't to want the coefficient directly,
++          ! we want to interpolate it from neighboring coupled but non(!)-land cells
++          ! otherwise a exchange grid cell over water will have turbulent coefficient of land point
++          IF ((zmask(i,j) == 0) .AND. llandmask(i,j)) THEN
++
++            ztmp1(i,j) = 0.0_ireals
++            c = 0.0_ireals
++
++            ! interpolate from the closest two shells at maximum
++            DO k = 1, 3
++              ! get indeces of shell borders
++              left = max(i-k,1)
++              right = min(i+k, ie)
++              bottom = max(j-k,1)
++              top = min(j+k, je)
++
++              DO jj = bottom, top
++                ! go over left neighbors from bottom to top
++                IF ((zmask(left,jj) == 0) .AND. (.NOT. llandmask(left,jj))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((left - i) * dlon)**2 + ((jj - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tch(left,jj)
++                  c = c + w
++                ENDIF
++                ! go over right neighbors from bottom to top
++                IF ((zmask(right,jj) == 0) .AND. (.NOT. llandmask(right,jj))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((right - i) * dlon)**2 + ((jj - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tch(right,jj)
++                  c = c + w
++                ENDIF
++              ENDDO
++              DO ii = left, right
++                ! go over bottom neighbors from left to right
++                IF ((zmask(ii,bottom) == 0) .AND. (.NOT. llandmask(ii,bottom))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((ii - i) * dlon)**2 + ((bottom - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tch(ii,bottom)
++                  c = c + w
++                ENDIF
++                ! go over top neighbors from left to right
++                IF ((zmask(ii,top) == 0) .AND. (.NOT. llandmask(ii,top))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((ii - i) * dlon)**2 + ((top - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tch(ii,top)
++                  c = c + w
++                ENDIF   
++              ENDDO      
++              
++              IF (c > 0.0_ireals) THEN
++                ! if we found valid points for interpolation in this shell, we stop
++                ztmp1(i,j) = ztmp1(i,j) / c
++                EXIT
++                ! otherwise we go to the next shell
++              ENDIF 
++            ENDDO
++
++            ! if there are no valid point for interpolation in any shell, we take the value as is
++            IF (c == 0.0_ireals) THEN
++              ztmp1(i,j) = tch(i,j)
++            ENDIF
++
++          ENDIF
++        ENDDO
++      ENDDO      
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)   ! Atmospheric diffusion coeff. for mosisture ASAMOI00
++    ENDIF
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=tcm(:,:)
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++
++      DO j = nldj,nlej
++        DO i = nldi,nlei
++          ! if there is a coupled cell that is also markes as land, we don't to want the coefficient directly,
++          ! we want to interpolate it from neighboring coupled but non(!)-land cells
++          ! otherwise a exchange grid cell over water will have turbulent coefficient of land point
++          IF ((zmask(i,j) == 0) .AND. llandmask(i,j)) THEN
++
++            ztmp1(i,j) = 0.0_ireals
++            c = 0.0_ireals
++
++            ! interpolate from the closest two shells at maximum
++            DO k = 1, 3
++              ! get indeces of shell borders
++              left = max(i-k,1)
++              right = min(i+k, ie)
++              bottom = max(j-k,1)
++              top = min(j+k, je)
++
++              DO jj = bottom, top
++                ! go over left neighbors from bottom to top
++                IF ((zmask(left,jj) == 0) .AND. (.NOT. llandmask(left,jj))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((left - i) * dlon)**2 + ((jj - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tcm(left,jj)
++                  c = c + w
++                ENDIF
++                ! go over right neighbors from bottom to top
++                IF ((zmask(right,jj) == 0) .AND. (.NOT. llandmask(right,jj))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((right - i) * dlon)**2 + ((jj - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tcm(right,jj)
++                  c = c + w
++                ENDIF
++              ENDDO
++              DO ii = left, right
++                ! go over bottom neighbors from left to right
++                IF ((zmask(ii,bottom) == 0) .AND. (.NOT. llandmask(ii,bottom))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((ii - i) * dlon)**2 + ((bottom - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tcm(ii,bottom)
++                  c = c + w
++                ENDIF
++                ! go over top neighbors from left to right
++                IF ((zmask(ii,top) == 0) .AND. (.NOT. llandmask(ii,top))) THEN
++                  ! use Shepard interpolation with power parameter 4, weight is inverse distance**4 (in units of dlon)
++                  w = (dlon ** 4) / (((ii - i) * dlon)**2 + ((top - j) * dlat)**2) ** 2 
++                  ztmp1(i,j) = ztmp1(i,j) + w  * tcm(ii,top)
++                  c = c + w
++                ENDIF   
++              ENDDO      
++              
++              IF (c > 0.0_ireals) THEN
++                ! if we found valid points for interpolation in this shell, we stop
++                ztmp1(i,j) = ztmp1(i,j) / c
++                EXIT
++                ! otherwise we go to the next shell
++              ENDIF 
++            ENDDO
++
++            ! if there are no valid point for interpolation in any shell, we take the value as is
++            IF (c == 0.0_ireals) THEN
++              ztmp1(i,j) = tcm(i,j)
++            ENDIF
++
++          ENDIF
++        ENDDO
++      ENDDO
++
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)   ! Atmospheric diffusion coeff. for momentum ASAMOM00
++    ENDIF
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:) = qv_now(:,:,ke)
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Specific vapor content ASQATM00
++    ENDIF
++    jn = jn + 1
++    ztmp1(:,:) = 0.0
++    ztmp2(:,:) = 0.0
++    DO j = nldj,nlej
++      jm1 = max(j-1,1)
++      jp1 = min(j+1,je)
++      DO i = nldi,nlei
++        im1 = max(i-1,1)
++        ip1 = min(i+1,ie)
++        ztmp1(i,j) = 0.5*(u(i,j,ke,nnow) + u(im1,j,ke,nnow))
++        ztmp2(i,j) = 0.5*(v(i,j,ke,nnow) + v(i,jm1,ke,nnow))
++      ENDDO
++    ENDDO
++    CALL uvrot2uv_vec(ztmp1,ztmp2,rlat,rlon,pollat,pollon,ie,je)
++    IF( ssnd(jn)%laction ) THEN
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! Eastward wind in lowest atmos level ASUATM00
++    ENDIF
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      WHERE (zmask /= 0) ztmp2(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp2, kinfo)  ! Eastward wind in lowest atmos level ASVATM00
++    ENDIF
++
++    jn = jn + 1
++    IF( ssnd(jn)%laction ) THEN
++      ztmp1(:,:)=zalso_flc(:,:)
++      WHERE (zmask /= 0) ztmp1(:,:)=0.0_ireals
++      CALL oas_cos_snd (jn, isec, ztmp1, kinfo)  ! shortwave albedo ASALBE00
++    ENDIF
++
++    ! Then receive...
++
++    ! get integer mask within halo limits
++    mask = INT(zmask(nldi:nlei,nldj:nlej))
++    mask_u = INT(zmask_u(nldi:nlei,nldj:nlej))
++    mask_v = INT(zmask_v(nldi:nlei,nldj:nlej))
++    
++    nrcvinfo (:) = OASIS_idle
++    ztmp1 (:,:) = 0.0_ireals
++
++    DO jn = nfld_rcv_flc_early + 1, nfld_rcv_flc
++#ifdef IOW_ESM_DEBUG
++      WRITE(*,*) 'calling oas_cos_rcv for field jn=',jn,' from flux calculator.'
++#endif
++      CALL oas_cos_rcv( jn, isec, ztmp1(:,:), nrcvinfo(jn) )   
++      IF( nrcvinfo(jn) == OASIS_Rcv ) THEN
++        frcv(:,:,jn)=ztmp1(:,:) 
++#ifdef IOW_ESM_DEBUG
++        WRITE(*,*) 'CCLM received field jn=',jn,' from flux calculator.'
++#endif
++      ENDIF
++#ifdef IOW_ESM_DEBUG
++      WRITE(*,*) 'finished calling oas_cos_rcv for field jn=',jn,' from flux calculator.'
++#endif
++    ENDDO
++
++    jn = nfld_rcv_flc_early
++    jn = jn + 1   ! evaporation mass flux MEVA
++    IF( srcv(jn)%laction ) THEN 
++      IF(CPL_FLG .gt. 0) THEN   
++        WHERE (mask == 0) 
++          qvsflx(nldi:nlei,nldj:nlej) = -frcv(nldi:nlei,nldj:nlej,jn)
++        ELSEWHERE 
++          qvsflx(nldi:nlei,nldj:nlej) = 0.0
++        ENDWHERE
++      ENDIF
++    ENDIF
++    jn = jn + 1   ! latent heat flux HLAT
++    IF( srcv(jn)%laction ) THEN 
++      IF(CPL_FLG .gt. 0) THEN    
++        WHERE (mask == 0) 
++          lhfl_s(nldi:nlei,nldj:nlej) = -frcv(nldi:nlei,nldj:nlej,jn)
++        ELSEWHERE
++          lhfl_s(nldi:nlei,nldj:nlej) = 0.0
++        ENDWHERE
++      ENDIF
++    ENDIF
++    jn = jn + 1   ! sensible heat flux HSEN
++    IF( srcv(jn)%laction ) THEN 
++      IF(CPL_FLG .gt. 0) THEN    
++        WHERE (mask == 0) 
++          shfl_s(nldi:nlei,nldj:nlej) = -frcv(nldi:nlei,nldj:nlej,jn)
++        ELSEWHERE
++          shfl_s(nldi:nlei,nldj:nlej) = 0.0
++        ENDWHERE
++      ENDIF
++    ENDIF
++    jn = jn + 1   ! upward flux of eastward momentum UMOM
++    IF( srcv(jn)%laction ) THEN 
++      IF(CPL_FLG .gt. 0) THEN    
++        WHERE (mask_u == 0) 
++          umfl_s(nldi:nlei,nldj:nlej) = -frcv(nldi:nlei,nldj:nlej,jn)
++        ELSEWHERE
++          umfl_s(nldi:nlei,nldj:nlej) = 0.0
++        ENDWHERE
++      ENDIF
++    ENDIF
++    jn = jn + 1   ! upward flux of northward momentum VMOM
++    IF( srcv(jn)%laction ) THEN 
++      IF(CPL_FLG .gt. 0) THEN    
++        WHERE (mask_v == 0)
++          vmfl_s(nldi:nlei,nldj:nlej) = -frcv(nldi:nlei,nldj:nlej,jn)
++        ELSEWHERE
++          vmfl_s(nldi:nlei,nldj:nlej) = 0.0
++        ENDWHERE
++      ENDIF
++    ENDIF
++
++  ENDIF ! ytype_oce
++ENDIF ! lpe_cpl
++
++IF (ltime) CALL get_timings (i_cpl_put, ntstep, dt, ierror)
++
++END SUBROUTINE send_fld
++
++#endif ! OASIS_IOW_ESM
+\ No newline at end of file
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/slow_tendencies.f90 cclm/src/slow_tendencies.f90
+--- cclm-sp_2.0/src/cclm/src/slow_tendencies.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/slow_tendencies.f90	2023-07-25 16:08:58.657943100 +0200
+@@ -324,3 +324,7 @@
+ !------------------------------------------------------------------------------
+-
++#ifdef OASIS_IOW_ESM  
++  USE oas_cos_vardef ,      ONLY :   & 
++    ytype_oce
++#endif
++!------------------------------------------------------------------------------
+ 
+@@ -950,5 +954,7 @@
+ 
++
+   DO j =jstart, jend
+     DO i = istart , iend
+-      qvsflx(i,j)  =  - ztch(i,j)*gr                                    &
++
++      qvsflx(i,j)  = - ztch(i,j)*gr                                    &
+                      * (za2t_surf*(qv_s(i,j,nold) - qv_old(i,j,ke))  +  &
+@@ -968,3 +974,2 @@
+       ENDIF
+-
+     ENDDO
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_allocation.f90 cclm/src/src_allocation.f90
+--- cclm-sp_2.0/src/cclm/src/src_allocation.f90	2015-09-21 16:14:03.000000000 +0200
++++ cclm/src/src_allocation.f90	2023-07-25 16:08:58.664781100 +0200
+@@ -367,2 +367,5 @@
+     alb_sat    ,    & ! surface albedo field for saturated soil
++#ifdef OASIS_IOW_ESM
++    zalso_flc  ,    & ! averaged surface albedo for shortwave radiation from flux calculator ( )
++#endif
+     alb_dif           ! diffuse albedo field 
+@@ -414,2 +417,5 @@
+     t_g       ,     & ! weighted surface temperature                   (  k  )
++#ifdef OASIS_IOW_ESM
++    t_g_rad   ,     & ! weighted surface temperature for radiation     (  k  )
++#endif
+     tg_radstep,     & ! ground temperature at the last call            (  K  )
+@@ -646,2 +652,5 @@
+     rstom      ,    & ! stomata resistance                            ( s/m )
++#ifdef OASIS_IOW_ESM
++    fr_ice    ,     & ! ice fraction
++#endif
+     lhfl_bs    ,    & ! latent heat flux from bare soil evap.         ( W/m2)
+@@ -746,2 +755,5 @@
+ 
++#ifdef OASIS_IOW_ESM
++USE oas_cos_vardef,     ONLY : ytype_oce
++#endif
+ !------------------------------------------------------------------------------
+@@ -1018,3 +1030,2 @@
+ ! --------------------------------------------------
+-
+   ALLOCATE ( ps  (ie,je,nztlev) , STAT=izl ) ; ps     = 0.0  ; ist = ist + izl
+@@ -1023,2 +1034,9 @@
+   ALLOCATE ( t_g (ie,je,nztlev) , STAT=izl ) ; t_g    = 0.0  ; ist = ist + izl
++#ifdef OASIS_IOW_ESM
++  IF (ytype_oce == 'flxcl') THEN
++    ALLOCATE ( fr_ice(ie,je),STAT=izl ) ; fr_ice = -1.0  ; ist = ist + izl
++    ALLOCATE ( t_g_rad (ie,je,nztlev) , STAT=izl ) ; t_g_rad= 0.0  ; ist = ist + izl
++    ALLOCATE ( zalso_flc (ie,je) , STAT=izl ) ; zalso_flc= -1.0  ; ist = ist + izl
++  ENDIF
++#endif
+   ALLOCATE ( tg_radstep(ie,je)  , STAT=izl ) ; tg_radstep=0.0; ist = ist + izl
+@@ -1626,3 +1644,2 @@
+ ! --------------------------------------------------
+-
+   DEALLOCATE ( ps        , STAT=istat )
+@@ -1631,2 +1648,10 @@
+   DEALLOCATE ( t_g       , STAT=istat )
++#ifdef OASIS_IOW_ESM
++  IF (ytype_oce == 'flxcl') THEN
++    DEALLOCATE ( t_g_rad   , STAT=istat )
++    DEALLOCATE ( fr_ice, STAT=istat )
++    DEALLOCATE ( zalso_flc, STAT=istat )
++  ENDIF
++#endif
++
+   DEALLOCATE ( tg_radstep,STAT=istat )
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_gscp.f90 cclm/src/src_gscp.f90
+--- cclm-sp_2.0/src/cclm/src/src_gscp.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/src_gscp.f90	2023-07-25 16:08:58.702886400 +0200
+@@ -3003,2 +3003,6 @@
+         IF (qcg > 1e-6) THEN
++#ifdef OASIS_IOW_ESM
++          ztau   = MAX(MIN(1.0_ireals-qcg/(qcg+qrg),0.9_ireals) , 0._ireals)
++          ! without the MAX operator this might lead to taking sqrt of a negative number !
++#else
+ #ifndef MESSY
+@@ -3008,2 +3012,3 @@
+ #endif
++#endif ! OASIS_IOW_ESM
+           zphi   = zkphi1 * ztau**zkphi2 * (1.0_ireals - ztau**zkphi2)**3
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_meanvalues.f90 cclm/src/src_meanvalues.f90
+--- cclm-sp_2.0/src/cclm/src/src_meanvalues.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/src_meanvalues.f90	2023-07-25 16:08:58.722301000 +0200
+@@ -641,108 +641,108 @@
+   !----------------------------------------------------------------------------
+-
+-  IF (my_cart_id == 0) THEN
+-    ! get actual UTC-time
+-    !--------------------
+-    CALL get_utc_date (0_iintegers, ydate_ini, dt, itype_calendar,          &
+-                       yandat1, yinidate, nzanjata, zanhh)
+-    WRITE (ychh,'(I10)') NINT (ntstep * dt / 3600.0)
+-
+-    ! output of initial values for mass and energy fields
+-    !----------------------------------------------------
+-    WRITE (nuprmass,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')          &
+-        '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
+-        ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
+-    WRITE (nuprmass,'(A61,A16,F8.2)')                                       &
+-        '      Elapsed time for providing initial and boundary values:',    &
+-        '     REAL (S):  ',zrealdiff
+-    WRITE (nuprmass,'(A3)') '   '
+-    WRITE (nuprmass,'(A)')                                                  &
+-        '      Initial mean values for nstart = 0 for several variables:'
+-
+-    WRITE (nuprmass,'(A54,A54)')                                            &
+-        '      surface pressure (hPa)  dry static energy (J/kg)',           &
+-        '  moist static energy (J/kg)   kinetic energy (J/kg)  '
+-    WRITE (nuprmass,'(A,F20.3,3F25.2)')                                     &
+-        '# ', psm0*0.01, dsem0, msem0, kem0
+-    WRITE (nuprmass,'(A3)') '   '
+-
+-    WRITE (nuprmass,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')         &
+-        '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
+-        ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
+-
+-    WRITE (nuprmass,'(A6,11A10)')                                           &
+-        "ntstep",  "Real",    "dpsdt",   "ps",      "dse",     "mse",       &
+-        "ke",      "vhmax",   "wmax",    "wa850",   "wa500",   "wa300"
+-    WRITE (nuprmass,'(A6,11A10)')                                           &
+-        "  ",      "s",       "Pa/s",    "hPa",     "J/kg",    "J/kg",      &
+-        "J/kg",    "m/s",     "m/s",     "cm/s",    "cm/s",    "cm/s"
+-    WRITE (nuprmass,'(A6,11A10)')                                           &
+-        " ",       " ",       "E-2",     " ",       "E+3",     "E+3",       &
+-        " ",       " ",       " ",       " ",       " ",       " "
+-    WRITE (nuprmass,'(A3)') "   "
+-
+-
+-    ! output of initial values for humidity fields
+-    !---------------------------------------------
+-    WRITE (nuprhumi,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')          &
+-        '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
+-        ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
+-    WRITE (nuprhumi,'(A61,A16,F8.2)')                                       &
+-        '      Elapsed time for providing initial and boundary values:',    &
+-        '     REAL (S):  ',zrealdiff
+-    WRITE (nuprhumi,'(A3)') '   '
+-    WRITE (nuprhumi,'(A39,I5,A25)')                                         &
+-        '      Initial mean values for nstart = 0 for several variables:'
+-    WRITE (nuprhumi,'(A,A)')                                                &
++  IF (nstart==0) THEN
++    IF (my_cart_id == 0) THEN
++      ! get actual UTC-time
++      !--------------------
++      CALL get_utc_date (0_iintegers, ydate_ini, dt, itype_calendar,          &
++                        yandat1, yinidate, nzanjata, zanhh)
++      WRITE (ychh,'(I10)') NINT (ntstep * dt / 3600.0)
++
++      ! output of initial values for mass and energy fields
++      !----------------------------------------------------
++      WRITE (nuprmass,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')          &
++          '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
++          ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
++      WRITE (nuprmass,'(A61,A16,F8.2)')                                       &
++          '      Elapsed time for providing initial and boundary values:',    &
++          '     REAL (S):  ',zrealdiff
++      WRITE (nuprmass,'(A3)') '   '
++      WRITE (nuprmass,'(A)')                                                  &
++          '      Initial mean values for nstart = 0 for several variables:'
++
++      WRITE (nuprmass,'(A54,A54)')                                            &
++          '      surface pressure (hPa)  dry static energy (J/kg)',           &
++          '  moist static energy (J/kg)   kinetic energy (J/kg)  '
++      WRITE (nuprmass,'(A,F20.3,3F25.2)')                                     &
++          '# ', psm0*0.01, dsem0, msem0, kem0
++      WRITE (nuprmass,'(A3)') '   '
++
++      WRITE (nuprmass,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')         &
++          '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
++          ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
++
++      WRITE (nuprmass,'(A6,11A10)')                                           &
++          "ntstep",  "Real",    "dpsdt",   "ps",      "dse",     "mse",       &
++          "ke",      "vhmax",   "wmax",    "wa850",   "wa500",   "wa300"
++      WRITE (nuprmass,'(A6,11A10)')                                           &
++          "  ",      "s",       "Pa/s",    "hPa",     "J/kg",    "J/kg",      &
++          "J/kg",    "m/s",     "m/s",     "cm/s",    "cm/s",    "cm/s"
++      WRITE (nuprmass,'(A6,11A10)')                                           &
++          " ",       " ",       "E-2",     " ",       "E+3",     "E+3",       &
++          " ",       " ",       " ",       " ",       " ",       " "
++      WRITE (nuprmass,'(A3)') "   "
++
++
++      ! output of initial values for humidity fields
++      !---------------------------------------------
++      WRITE (nuprhumi,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')          &
++          '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
++          ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
++      WRITE (nuprhumi,'(A61,A16,F8.2)')                                       &
++          '      Elapsed time for providing initial and boundary values:',    &
++          '     REAL (S):  ',zrealdiff
++      WRITE (nuprhumi,'(A3)') '   '
++      WRITE (nuprhumi,'(A39,I5,A25)')                                         &
++          '      Initial mean values for nstart = 0 for several variables:'
++      WRITE (nuprhumi,'(A,A)')                                                &
+ #ifdef TWOMOM_SB
+-        '      cloud water  cloud ice     rain        snow       graupel/hail',  &
++          '      cloud water  cloud ice     rain        snow       graupel/hail',  &
+ #else
+-        '      cloud water  cloud ice     rain        snow       graupel',  &
++          '      cloud water  cloud ice     rain        snow       graupel',  &
+ #endif
+-        '      (all: kg/kg)'
++          '      (all: kg/kg)'
+ 
+-    WRITE (nuprhumi,'(A,F15.3,4F12.3)')                                     &
+-        '#  ', qcm0*1.0E3, qim0*1.0E3, qrm0*1.0E3, qsm0*1.0E3, qgm0*1.0E3
++      WRITE (nuprhumi,'(A,F15.3,4F12.3)')                                     &
++          '#  ', qcm0*1.0E3, qim0*1.0E3, qrm0*1.0E3, qsm0*1.0E3, qgm0*1.0E3
+ 
+-    WRITE (nuprhumi,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')         &
+-        '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
+-        ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
++      WRITE (nuprhumi,'(A         ,I6,A31,A3,A10,A5,A28,A1,A15,A11)')         &
++          '      Experiment:  COSMO-Model        Number: ',nvers, yinidate,   &
++          ' + ',ychh,' H  (',yakdat2,')',ydate,ytime
+ 
+-    WRITE (nuprhumi,'(A6,11A10)')                                           &
++      WRITE (nuprhumi,'(A6,11A10)')                                           &
+ #ifdef TWOMOM_SB
+-        "ntstep",  "qc",      "qi",      "qr",      "qs",      "qg+qh",     &
++          "ntstep",  "qc",      "qi",      "qr",      "qs",      "qg+qh",     &
+ #else
+-        "ntstep",  "qc",      "qi",      "qr",      "qs",      "qg",        &
++          "ntstep",  "qc",      "qi",      "qr",      "qs",      "qg",        &
+ #endif
+-        "prrs",    "prss",    "prrk",    "prsk",    "rrn",     "rsn"
+-    WRITE (nuprhumi,'(A6,11A10)')                                           &
+-        " ",       "kg/kg",   "kg/kg",   "kg/kg",   "kg/kg",   "kg/kg",     &
+-        "mm/D",    "mm/D",    "mm/D",    "mm/D",    "mm",      "mm"
+-    WRITE (nuprhumi,'(A6,11A10)')                                           &
+-        " ",       "E-5",     "E-5",     "E-5",     "E-5",     "E-5",       &
+-        " ",       " ",       " ",       " ",       " ",       " "
+-    IF     (itype_gscp == 4 ) THEN
+-      WRITE (nuprhumi,'(A)')                                                &
+-        '                                 (prss and rsn including graupel)'
+-    ELSEIF (itype_gscp >= 100 ) THEN
+-      WRITE (nuprhumi,'(A)')                                                &
+-        '                        (prss and rsn including graupel and hail)'
++          "prrs",    "prss",    "prrk",    "prsk",    "rrn",     "rsn"
++      WRITE (nuprhumi,'(A6,11A10)')                                           &
++          " ",       "kg/kg",   "kg/kg",   "kg/kg",   "kg/kg",   "kg/kg",     &
++          "mm/D",    "mm/D",    "mm/D",    "mm/D",    "mm",      "mm"
++      WRITE (nuprhumi,'(A6,11A10)')                                           &
++          " ",       "E-5",     "E-5",     "E-5",     "E-5",     "E-5",       &
++          " ",       " ",       " ",       " ",       " ",       " "
++      IF     (itype_gscp == 4 ) THEN
++        WRITE (nuprhumi,'(A)')                                                &
++          '                                 (prss and rsn including graupel)'
++      ELSEIF (itype_gscp >= 100 ) THEN
++        WRITE (nuprhumi,'(A)')                                                &
++          '                        (prss and rsn including graupel and hail)'
++      ENDIF
++      WRITE (nuprhumi,'(A3)') '   '
++
++      ! output of initial values for testsuite fields
++      !----------------------------------------------
++
++      IF  (ltestsuite) THEN
++        WRITE (nuprtest,'(A         ,I6,A31,A3,A10,A5,A28,A1)')               &
++            '#    Experiment:  COSMO-Model        Number: ',nvers, yinidate, &
++            ' + ',ychh,' H  (',yakdat2,')'
++        WRITE (nuprtest,'(A,I5,A,I5,A,I5)')                                   &
++            '#    ie_tot =',ie_tot,'   je_tot =',je_tot,'   ke =',ke
++        WRITE (nuprtest,'(A)') "#   "
++        WRITE (nuprtest,'(A8,A6,A5,A28,2A5,A28,2A5,A28)')                     &
++            '#    var','nt',' lev','min','imin',' jmin',                     &
++            'max','imax',' jmax', 'mean'  
++      ENDIF
+     ENDIF
+-    WRITE (nuprhumi,'(A3)') '   '
+-
+-    ! output of initial values for testsuite fields
+-    !----------------------------------------------
+-
+-    IF  (ltestsuite) THEN
+-      WRITE (nuprtest,'(A         ,I6,A31,A3,A10,A5,A28,A1)')               &
+-           '#    Experiment:  COSMO-Model        Number: ',nvers, yinidate, &
+-           ' + ',ychh,' H  (',yakdat2,')'
+-      WRITE (nuprtest,'(A,I5,A,I5,A,I5)')                                   &
+-           '#    ie_tot =',ie_tot,'   je_tot =',je_tot,'   ke =',ke
+-      WRITE (nuprtest,'(A)') "#   "
+-      WRITE (nuprtest,'(A8,A6,A5,A28,2A5,A28,2A5,A28)')                     &
+-           '#    var','nt',' lev','min','imin',' jmin',                     &
+-           'max','imax',' jmax', 'mean'  
+-    ENDIF
+-
+   ENDIF
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_output.f90 cclm/src/src_output.f90
+--- cclm-sp_2.0/src/cclm/src/src_output.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/src_output.f90	2023-07-25 16:08:58.802165700 +0200
+@@ -1365,11 +1365,4 @@
+ 
+-!_br 08.09.15
+-#ifdef NETCDF
+-REAL (KIND=ireals), PARAMETER   ::     & !
+-  missing_value = -1.E20_ireals
+-#else
+ REAL (KIND=ireals), PARAMETER   ::     & !
+   missing_value = -999.9_ireals
+-#endif
+-!_br 08.09.15 end
+ 
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_radiation.f90 cclm/src/src_radiation.f90
+--- cclm-sp_2.0/src/cclm/src/src_radiation.f90	2015-09-21 16:13:47.000000000 +0200
++++ cclm/src/src_radiation.f90	2023-07-25 16:08:58.809059500 +0200
+@@ -341,4 +341,8 @@
+     alb_sat    ,    & ! surface albedo for saturated soil             (     )
++#ifdef OASIS_IOW_ESM
++    zalso_flc  ,    & ! averaged surface albedo for shortwave radiation from flux calculator ( )
++#endif
+     alb_dif           ! solar surface albedo                          (     )
+ 
++
+ USE data_fields     , ONLY :   &
+@@ -352,2 +356,5 @@
+ ! -----------------------------------------------------
++#ifdef OASIS_IOW_ESM
++    fr_ice    ,       & ! ice fraction                                  (     )
++#endif
+     ps        ,     & ! surface pressure                              ( pa  )
+@@ -357,2 +364,5 @@
+     t_g       ,     & ! weighted surface temperature                  (  k  )
++#ifdef OASIS_IOW_ESM
++    t_g_rad   ,     & ! weighted surface temperature for radiation    (  k  )
++#endif
+     w_snow    ,     & ! water content of snow                         (m H2O)
+@@ -664,2 +674,8 @@
+ 
++#ifdef OASIS_IOW_ESM
++USE oas_cos_vardef,     ONLY :  ytype_oce, fmask
++USE data_runcontrol ,   ONLY :  yakdat1
++USE bias_corrections, ONLY : lcorrections, corrections, E_ASWDIR_S_CORRECTION, E_ALWD_S_CORRECTION, lat_night
++#endif
++
+ !==============================================================================
+@@ -668,2 +684,6 @@
+ 
++#ifdef OASIS_IOW_ESM
++INTEGER  :: month
++#endif
++
+ !==============================================================================
+@@ -2230,3 +2250,11 @@
+           IF (t_snow_mult(i,j,1,nzx) < 0.0_ireals) THEN
+-            t_test = t_g   (i,j,nzx)
++#ifdef OASIS_IOW_ESM
++            IF (ytype_oce == 'flxcl') THEN ! for IOW_ESM we use the usual surface temperature in the uncoupled case         
++              t_test = t_g_rad(i,j,nzx)
++            ELSE
++#endif
++            t_test = t_g   (i,j,nzx)  
++#ifdef OASIS_IOW_ESM
++            ENDIF
++#endif
+           ELSE
+@@ -2236,3 +2264,11 @@
+           IF (t_snow(i,j,nzx) < 0.0_ireals) THEN
+-            t_test = t_g   (i,j,nzx)
++#ifdef OASIS_IOW_ESM
++            IF (ytype_oce == 'flxcl') THEN ! for IOW_ESM we use the usual surface temperature in the uncoupled case             
++              t_test = t_g_rad(i,j,nzx)
++            ELSE
++#endif
++            t_test = t_g   (i,j,nzx)  
++#ifdef OASIS_IOW_ESM
++            ENDIF
++#endif
+           ELSE
+@@ -2246,3 +2282,2 @@
+         zalso(i,j) = csalb(ist)
+-
+         IF (lsoil .AND. llandmask(i,j)) THEN
+@@ -2362,2 +2397,11 @@
+       ENDIF
++#ifdef OASIS_IOW_ESM
++      IF (ytype_oce == 'flxcl') THEN
++        DO  i = istartrad, iendparrad   ! istartpar, iendpar
++          IF(zalso_flc(i,j) /= -1.0_ireals) THEN ! if albedo has been received from flux_calculator, there will be number different from -1
++            zalso(i,j) = (1.0_ireals - fmask(i,j)) * zalso_flc(i,j) + fmask(i,j) * zalso(i,j) 
++          ENDIF
++        ENDDO
++      ENDIF
++#endif
+     ENDDO
+@@ -2550,3 +2594,11 @@
+               zthvo   = t  (i,j,k  ,nzx)/zpio
++#ifdef OASIS_IOW_ESM
++              IF (ytype_oce == 'flxcl') THEN
++                zthvu   = t_g_rad(i,j,    nzx)/zpiu
++              ELSE
++#endif
+               zthvu   = t_g(i,j,    nzx)/zpiu
++#ifdef OASIS_IOW_ESM
++              ENDIF
++#endif
+               zdthdz  = zthvo - zthvu 
+@@ -2803,3 +2855,11 @@
+         zphf    = p0    (i,j,1)
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN
++          zti(i,j,ke1) = t_g_rad(i,j,nzx)
++        ELSE
++#endif
+         zti(i,j,ke1) = t_g(i,j,nzx)
++#ifdef OASIS_IOW_ESM
++        ENDIF
++#endif
+         zti(i,j,  1) = t  (i,j,1,nzx) - zphf*(t(i,j,1,nzx)-zti(i,j,2))/(zphf - zpnf)
+@@ -3593,3 +3653,12 @@
+         DO i = istartpar,iendpar
++#ifdef OASIS_IOW_ESM
++          IF (ytype_oce == 'flxcl') THEN
++            ! TODO check if ctalb is not multiplied twice since t_g_rad may already include it
++            thbs (i,js) = thbs(i,js) - zstb*(1._ireals - ctalb)*(t_g_rad(i,js,nzx)**4)
++          ELSE
++#endif
+           thbs (i,js) = thbs(i,js) - zstb*(1._ireals - ctalb)*(t_g(i,js,nzx)**4)
++#ifdef OASIS_IOW_ESM
++          ENDIF
++#endif
+         ENDDO !i
+@@ -3985,2 +4054,27 @@
+ 
++#ifdef OASIS_IOW_ESM
++  IF (lcorrections(E_ASWDIR_S_CORRECTION)) THEN
++
++    READ(yakdat1(5:6), *) month 
++
++    IF (yakdat1(7:8) == '01' .AND. yakdat1(9:10) == '00' .AND. yakdat1(11:12) == '00' ) THEN
++      WRITE(*,*) 'Apply ASWDIR_S correction for month ', month
++      IF (lat_night == .TRUE.) THEN
++        WRITE(*,*) ' ... also at night'
++      ENDIF
++    ENDIF
++
++    DO js=jstartpar,jendpar
++      DO i = istartpar,iendpar
++          IF (lat_night == .TRUE.) THEN
++            swdir_s(i,js) = swdir_s(i,js) + corrections(E_ASWDIR_S_CORRECTION, month, i, js)
++          ELSE
++            IF (swdir_s(i,js) > 0.0) THEN 
++              swdir_s(i,js) = swdir_s(i,js) + corrections(E_ASWDIR_S_CORRECTION, month, i, js)
++            ENDIF
++          ENDIF
++      ENDDO !i
++    ENDDO !js
++  ENDIF
++#endif
+ !-------------------------------------------------------------------------------
+@@ -4782,2 +4876,14 @@
+   !----------------------------------------------------------------------------
++#ifdef OASIS_IOW_ESM
++  IF (lcorrections(E_ALWD_S_CORRECTION)) THEN
++    READ(yakdat1(5:6), *) month 
++
++    IF (yakdat1(7:8) == '01' .AND. yakdat1(9:10) == '00' .AND. yakdat1(11:12) == '00') THEN
++      WRITE(*,*) 'Apply ALWD_S correction for month ', month
++      IF (lat_night == .TRUE.) THEN
++        WRITE(*,*) ' ... also at night'
++      ENDIF
++    ENDIF
++  ENDIF
++#endif  
+ 
+@@ -4792,2 +4898,13 @@
+                         / zemissivity
++#ifdef OASIS_IOW_ESM
++      IF (lcorrections(E_ALWD_S_CORRECTION)) THEN
++        IF (lat_night == .TRUE.) THEN
++          pfltd (j1,j2) = pfltd (j1,j2) + corrections(E_ALWD_S_CORRECTION, month, j1, j2)
++        ELSE
++          IF (pfltd (j1,j2) > 0.0) THEN  
++            pfltd (j1,j2) = pfltd (j1,j2) + corrections(E_ALWD_S_CORRECTION, month, j1, j2)
++          ENDIF
++        ENDIF
++      ENDIF
++#endif
+       pfltu (j1,j2) = pfltd(j1,j2) - pflt(j1,j2,ki3ec+1)
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_setup.f90 cclm/src/src_setup.f90
+--- cclm-sp_2.0/src/cclm/src/src_setup.f90	2015-09-21 16:13:47.000000000 +0200
++++ cclm/src/src_setup.f90	2023-07-25 16:08:58.822703900 +0200
+@@ -845,3 +845,3 @@
+     ! Open files for input of the NAMELISTS and control output
+-    yinput   = 'INPUT_ORG'
++    yinput   = 'INPUT_ORG' 
+ 
+@@ -967,3 +967,3 @@
+   hstop = rtime_passed * 24._ireals
+-  nstop = INT(hstop*3600._ireals/dt)
++  nstop = INT((hstop*3600._ireals/dt))
+ #endif
+@@ -1615,4 +1615,9 @@
+   ! given in hours and calculate the values in time steps
+-  IF ( hstop /= hstop_d ) THEN
++ !Naveed changed nstop = nstop-1  
++IF ( hstop /= hstop_d ) THEN
++#ifdef OASIS_IOW_ESM
++    nstop = NINT((hstop * 3600.0_ireals / dt)-1)
++#else
+     nstop = NINT(hstop * 3600.0_ireals / dt)
++#endif
+   ELSEIF (nstop /= nstop_d) THEN
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_slow_tendencies_rk.f90 cclm/src/src_slow_tendencies_rk.f90
+--- cclm-sp_2.0/src/cclm/src/src_slow_tendencies_rk.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/src_slow_tendencies_rk.f90	2023-07-25 16:08:58.840352700 +0200
+@@ -310,2 +310,7 @@
+ 
++#ifdef OASIS_IOW_ESM  
++  USE oas_cos_vardef ,      ONLY :   & 
++    ytype_oce, fmask, fmask_u, fmask_v, zmask, zmask_u, zmask_v
++#endif
++
+ IMPLICIT NONE
+@@ -1315,2 +1320,11 @@
+         zcs        = zgct*za2t_surf
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN 
++          zbg        = zzdtr - zag - fmask(i,j) * zcg
++          zdg        = zzdtr * qv_new(i,j,ke  )               &
++          - zas * ( qv_now(i,j,ke-1) - qv_now(i,j,ke) )       &
++          + fmask(i,j) * (zcs *   qv_now(i,j,ke  ) - zgct * qv_s(i,j,nnow)) &
++          - (1.0_ireals - fmask(i,j)) * qvsflx(i,j) * zsqrtgrho_r_s(i,j,ke)
++        ELSE
++#endif
+         zbg        = zzdtr - zag - zcg
+@@ -1319,2 +1333,5 @@
+                    + zcs *   qv_now(i,j,ke  ) - zgct * qv_s(i,j,nnow)
++#ifdef OASIS_IOW_ESM
++        ENDIF
++#endif
+         zz         = 1.0_ireals / ( zbg  - zag*zc(i,j,ke-1) )
+@@ -1867,2 +1884,11 @@
+     DO i = istart , iend
++#ifdef OASIS_IOW_ESM
++      IF (ytype_oce == 'flxcl') THEN
++        qvsflx(i,j) = (1.0_ireals - fmask(i,j))*qvsflx(i,j) + fmask(i,j) * (- ztch(i,j) * &
++        ( za2t_surf*(qv_s(i,j,nnow) - qv_now(i,j,ke)) +  &
++          za1t_surf*(qv_s(i,j,nnew) - qv_new(i,j,ke)) ))
++
++        lhfl_s(i,j) = (1.0_ireals - fmask(i,j))*lhfl_s(i,j) + fmask(i,j) * (lh_v*qvsflx(i,j))
++      ELSE
++#endif
+       qvsflx(i,j)  =  - ztch(i,j) * &
+@@ -1870,3 +1896,8 @@
+                        za1t_surf*(qv_s(i,j,nnew) - qv_new(i,j,ke)) )
++
+       lhfl_s(i,j) = lh_v*qvsflx(i,j)
++
++#ifdef OASIS_IOW_ESM
++      ENDIF
++#endif
+     ENDDO
+@@ -3149,2 +3180,15 @@
+           zag        = zgat*za1t(ke)*zpianf(i,j,ke)/zpia(i,j,ke-1)
++#ifdef OASIS_IOW_ESM
++          IF (ytype_oce == 'flxcl') THEN 
++            zbg        = zzdtr - zgat*za1t(ke )*zpianf(i,j,ke )/zpia(i,j,ke)   &
++            - fmask(i,j) * zgct*za1t_surf*zpianf(i,j,ke1)/zpia(i,j,ke)
++
++            zdg        = zzdtr * t(i,j,ke,nnow) + ttens(i,j,ke)               &
++            - zgat*za2t(ke)*zpianf(i,j,ke ) *                                 &
++              ( ztheta(i,j,ke-1) - ztheta(i,j,ke) )                           &
++            + fmask(i,j) * (zgct*za2t_surf *zpianf(i,j,ke1)*                  &
++              ztheta(i,j,ke) - zgct*t_g(i,j,nnow))                            &
++            - (1.0_ireals - fmask(i,j)) * shfl_s(i,j) * zsqrtgrho_r_s(i,j,ke) / cp_d
++          ELSE
++#endif
+           zbg        = zzdtr - zgat*za1t(ke )*zpianf(i,j,ke )/zpia(i,j,ke)   &
+@@ -3156,2 +3200,5 @@
+               ztheta(i,j,ke) - zgct*t_g(i,j,nnow)
++#ifdef OASIS_IOW_ESM
++          ENDIF
++#endif
+           znew       = ( zdg -zag*zd1(i,j,ke-1) ) / ( zbg - zag*zc(i,j,ke-1) )
+@@ -3178,2 +3225,15 @@
+ 
++#ifdef OASIS_IOW_ESM
++    IF (ytype_oce == 'flxcl') THEN  ! for IOW_ESM this we use average of recevived and calculated flux
++      DO j = jstart, jend
++        DO  i  = istart , iend
++          shfl_s (i,j) = (1.0_ireals - fmask(i,j))*shfl_s (i,j) + fmask(i,j) * ( - ztch(i,j)*cp_d*                  &
++            ( za2t_surf*(t_g(i,j,nnow) - zpianf(i,j,ke1)*   &
++                        t  (i,j,ke,nnow)/zpia(i,j,ke) ) +  &
++              za1t_surf*(t_g(i,j,nnew) - zpianf(i,j,ke1)*   &
++                        ze(i,j,ke)/zpia(i,j,ke) ) ))
++        ENDDO
++      ENDDO
++    ELSE
++#endif
+     DO j = jstart, jend
+@@ -3187,2 +3247,5 @@
+     ENDDO
++#ifdef OASIS_IOW_ESM
++  ENDIF
++#endif
+ 
+@@ -3239,2 +3302,11 @@
+         zcs        = za2t(ke1)*zgct
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN 
++          zbg        = zzdtr - zag - fmask_u(i,j) * zcg
++          zdg        = zzdtr * u(i,j,ke,nnow) + utens(i,j,ke)  &
++          - zas * ( u(i,j,ke-1,nnow) - u(i,j,ke,nnow) )      &
++          + fmask_u(i,j) * (zcs * u(i,j,ke,nnow))            &
++          - (1.0_ireals - fmask_u(i,j)) * umfl_s(i,j) * zsqrtgrho_r_u(i,j,ke)
++        ELSE
++#endif
+         zbg        = zzdtr - zag - zcg
+@@ -3243,5 +3315,16 @@
+           + zcs * u(i,j,ke,nnow)
++#ifdef OASIS_IOW_ESM
++        ENDIF
++#endif
+         znew       = ( zdg -zag*zd1(i,j,ke-1) ) / ( zbg - zag*zc(i,j,ke-1) )
+         utens(i,j,ke) = ( znew - u(i,j,ke,nnow) ) * zzdtr
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN  ! for IOW_ESM this we use average of recevived and calculated flux
++          umfl_s(i,j) = (1.0_ireals - fmask_u(i,j))*umfl_s(i,j) + fmask_u(i,j) * (ztmcmq*( a2t(ke1)*u(i,j,ke,nnow) + a1t(ke1)*znew ))
++        ELSE
++#endif
+         umfl_s(i,j  ) = ztmcmq*( a2t(ke1)*u(i,j,ke,nnow) + a1t(ke1)*znew )
++#ifdef OASIS_IOW_ESM
++        ENDIF
++#endif
+         ze   (i,j,ke) = znew
+@@ -3312,2 +3395,11 @@
+         zcs        = za2t(ke1)*zgct
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN 
++          zbg        = zzdtr - zag - fmask_v(i,j) * zcg
++          zdg        = zzdtr * v(i,j,ke,nnow) + vtens(i,j,ke)  &
++          - zas * ( v(i,j,ke-1,nnow) - v(i,j,ke,nnow) )      &
++          + fmask_v(i,j) * (zcs * v(i,j,ke,nnow))            &
++          - (1.0_ireals - fmask_v(i,j)) * vmfl_s(i,j) * zsqrtgrho_r_v(i,j,ke)
++        ELSE
++#endif
+         zbg        = zzdtr - zag - zcg
+@@ -3316,5 +3408,16 @@
+           + zcs * v(i,j,ke,nnow)
++#ifdef OASIS_IOW_ESM
++        ENDIF
++#endif
+         znew       = ( zdg -zag*zd1(i,j,ke-1) ) / ( zbg - zag*zc(i,j,ke-1) )
+         vtens(i,j,ke) = ( znew - v(i,j,ke,nnow) ) * zzdtr
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN  ! for IOW_ESM this we use average of recevived and calculated flux
++          vmfl_s(i,j  ) = (1.0_ireals - fmask_v(i,j))*vmfl_s(i,j) + fmask_v(i,j) * ( ztmcmq*( a2t(ke1)*v(i,j,ke,nnow) + a1t(ke1)*znew ))
++        ELSE
++#endif
+         vmfl_s(i,j  ) = ztmcmq*( a2t(ke1)*v(i,j,ke,nnow) + a1t(ke1)*znew )
++#ifdef OASIS_IOW_ESM
++        ENDIF
++#endif
+         ze   (i,j,ke) = znew
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_soil_multlay.f90 cclm/src/src_soil_multlay.f90
+--- cclm-sp_2.0/src/cclm/src/src_soil_multlay.f90	2015-09-21 16:14:05.000000000 +0200
++++ cclm/src/src_soil_multlay.f90	2023-07-25 16:08:58.848164400 +0200
+@@ -155,2 +155,6 @@
+ !   Introduction of two new tuning parameters for soil fac_rootdp2, soilhyd
++! V5_00_clm6   2015/09/11 B. Rockel, HZG
++!  Bug fix in case of restarts when using the option
++!   itype_heatcond=2. Missing setting of w_so_ice at time-level nnew has been
++!   corrected
+ !
+@@ -1123,3 +1127,3 @@
+ 
+-!_br 11.09.15
++!_br 11.09.15 begin
+     w_so_ice(:,:,:,nnew) = w_so_ice(:,:,:,nx)
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/src_turbulence.f90 cclm/src/src_turbulence.f90
+--- cclm-sp_2.0/src/cclm/src/src_turbulence.f90	2015-09-21 16:14:04.000000000 +0200
++++ cclm/src/src_turbulence.f90	2023-07-25 16:08:58.860893900 +0200
+@@ -206,4 +206,5 @@
+ ! ---------------------------------
+-    akt,           &! von Karman-constant
+-    d_mom           ! = 16.6 (dissipation constant)
++    akt,           & ! von Karman-constant
++    d_mom,         & ! = 16.6 (dissipation constant)
++    z0_ice           ! roughness length of sea ice
+ 
+@@ -247,2 +248,5 @@
+     h_ice     ,     & ! ice thickness                                 (  m  )
++#ifdef OASIS_IOW_ESM    
++    fr_ice    ,     & ! fraction of ice received from ocean model       --
++#endif
+     t_s       ,     & ! temperature of the ground surface             (  k  )
+@@ -326,2 +330,6 @@
+ 
++#ifdef OASIS_IOW_ESM
++USE oas_cos_vardef,     ONLY : ytype_oce
++#endif
++
+ !==============================================================================
+@@ -827,17 +835,17 @@
+       IF ( fr_land(i,j) < 0.5 .AND. gz0(i,j) <= 0.0 ) THEN
+-
+         ! Use ice surface roughness or open-water surface roughness according
+         ! to l_ls_ice
++    
++        ! set z0 to 0.001m over sea ice 
++        IF ( l_ls_ice) THEN   !ice surface
++          gz0(i,j) = z0_ice*g
+ 
+-        ! set z0 to 0.001m over sea ice      
+-        IF ( l_ls_ice ) THEN
+-          gz0(i,j) = 0.001*g
+-  
+         ! set z0 over water for first iteration
+-        ELSE
+-          zgz0d = zalpha0*(zvpb(i,j)/(1.0/zbeta10       &
+-                  + LOG( zdfip(i,j)/(g*z10) )/akt))**2
++        ELSE !water surface
++          zgz0d = zalpha0*(zvpb(i,j)/(1.0/zbeta10 + LOG( zdfip(i,j)/(g*z10) )/akt))**2
++
+           IF ( zris(i,j) < 0.0 ) THEN
+-             zgz0dd = zalphaf**3 / ( zah*SQRT(zdfip(i,j)) ) &
+-                      * ( zalpha0*zx(i,j) )**1.5
++
++             zgz0dd = zalphaf**3 / ( zah*SQRT(zdfip(i,j)) ) * ( zalpha0*zx(i,j) )**1.5
++
+           ELSE
+@@ -848,2 +856,9 @@
+         ENDIF
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN
++          IF (fr_ice(i,j) /= -1) THEN
++            gz0(i,j) =( zgz0d + zgz0dd ) * (1-fr_ice(i,j)) + z0_ice*g*fr_ice(i,j)
++          ENDIF
++        ENDIF
++#endif
+       ENDIF
+@@ -870,4 +885,3 @@
+ 
+-        ! Use ice surface roughness or open-water surface roughness according
+-        ! to l_ls_ice
++        zustar = SQRT ( zgz0m(i,j)/zalpha0 )
+         IF ( l_ls_ice ) THEN
+@@ -875,8 +889,14 @@
+           zgz0h(i,j) = zgz0m(i,j)
+-        ELSE
+-          ! Open-water surface
++        ELSE    
++          ! Open-water surface       
+           zustar = SQRT ( zgz0m(i,j)/zalpha0 )
+           zgz0h(i,j) = g*zviscos*zalphah / MAX( 1.0E-8_ireals, zustar )
++        ENDIF  
++#ifdef OASIS_IOW_ESM
++        IF (ytype_oce == 'flxcl') THEN
++          IF (fr_ice(i,j) /= -1) THEN
++            zgz0h(i,j) = fr_ice(i,j) * zgz0m(i,j) + (1-fr_ice(i,j)) * g*zviscos*zalphah / MAX( 1.0E-8_ireals, zustar )
++          ENDIF
+         ENDIF
+-
++#endif
+       ELSE
+@@ -911,3 +931,3 @@
+             ! set z0 to 0.001m over sea ice
+-            gz0(i,j) = 0.001*g
++            gz0(i,j) = z0_ice*g
+           ELSE
+@@ -916,2 +936,12 @@
+           ENDIF
++
++#ifdef OASIS_IOW_ESM
++          ! calculate z0 over water by Charnock formula
++          IF (ytype_oce == 'flxcl') THEN
++            IF (fr_ice(i,j) /= -1.0) THEN
++              gz0 (i,j) = zalpha0*ztcm(i,j)*zvpb(i,j) * (1-fr_ice(i,j)) + z0_ice*g*fr_ice(i,j)
++            ENDIF
++          ENDIF
++#endif 
++
+         ENDIF
+@@ -941,5 +971,5 @@
+             ! set z0 to 0.001m over sea ice
+-            gz0(i,j)= 0.001*g
++            gz0(i,j)= z0_ice*g
+           ELSE
+-            ! calculate z0 over water by Charnock formula
++            ! calculate z0 over water by Charnock formula 
+             gz0(i,j) = zalpha0 * ( ztcm(i,j)*zvpb(i,j) + zalphaf**2 &
+@@ -947,2 +977,12 @@
+           ENDIF
++
++#ifdef OASIS_IOW_ESM
++          ! calculate z0 over water by Charnock formula
++          IF (ytype_oce == 'flxcl') THEN
++            IF (fr_ice(i,j) /= -1.0) THEN
++              gz0(i,j) = zalpha0 * ( ztcm(i,j)*zvpb(i,j) + zalphaf**2 &
++              * ( ztch(i,j)*zx(i,j) )**zd3 ) * (1-fr_ice(i,j)) + z0_ice*g*fr_ice(i,j)
++            ENDIF
++          ENDIF
++#endif 
+         ENDIF
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/time_utilities.f90 cclm/src/time_utilities.f90
+--- cclm-sp_2.0/src/cclm/src/time_utilities.f90	2015-09-21 16:14:04.000000000 +0200
++++ cclm/src/time_utilities.f90	2023-07-25 16:08:58.865816000 +0200
+@@ -154,2 +154,8 @@
+ 
++#ifdef OASIS_IOW_ESM
++  INTEGER (KIND=iintegers), PUBLIC          ::      &
++    i_oasis_cpl           , i_cpl_get             , i_cpl_put             ,  &
++    i_cpl_add_comp        , i_cpl_define          , i_cpl_vert_interp     ,  &
++    i_cpl_grad
++#endif
+ 
+@@ -238,2 +244,5 @@
+   IF (l_2mom)      idim_table = 110_iintegers
++#ifdef OASIS_IOW_ESM
++ idim_table    = 127_iintegers
++#endif
+   itu_timing    = itype_timing
+@@ -378,2 +387,11 @@
+   END IF
++#ifdef OASIS_IOW_ESM
++    ytable(120) = '  OASIS coupling      ';  i_oasis_cpl          = 120
++    ytable(121) = '  OASIS define        ';  i_cpl_define           = 121
++    ytable(122) = '  OASIS get/receive   ';  i_cpl_get              = 122
++    ytable(123) = '  OASIS put/send      ';  i_cpl_put              = 123
++    ytable(124) = '  Vertical interpol.  ';  i_cpl_vert_interp      = 124
++    ytable(125) = '  Addit. computations ';  i_cpl_add_comp         = 125
++    ytable(126) = '  Horizontal gradients';  i_cpl_grad             = 126
++#endif
+ 
+@@ -692,2 +710,10 @@
+     ENDIF
++#ifdef OASIS_IOW_ESM
++        ! OASIS coupling:     sum(79-84)
++        DO iz = 120, 126
++          timings( i_oasis_cpl       ,ihours) =                    &
++                         timings( i_oasis_cpl       ,ihours) +     &
++                         timings(                 iz,ihours)
++        ENDDO
++#endif
+ 
+@@ -1005,3 +1031,21 @@
+           ENDIF
+-
++    
++#ifdef OASIS_IOW_ESM
++          WRITE   (nutiming, '(A)')  '  '
++          WRITE   (nutiming, '(A,8F10.2)') ytable(          i_oasis_cpl)(1:22),&
++                  (ztotal_times(     i_oasis_cpl,n),n=nfpr,nlpr)
++          WRITE   (nutiming, '(A,8F10.2)') ytable(         i_cpl_define)(1:22),&
++                  (ztotal_times(    i_cpl_define,n),n=nfpr,nlpr)
++          WRITE   (nutiming, '(A,8F10.2)') ytable(            i_cpl_get)(1:22),&
++                  (ztotal_times(       i_cpl_get,n),n=nfpr,nlpr)
++          WRITE   (nutiming, '(A,8F10.2)') ytable(            i_cpl_put)(1:22),&
++                  (ztotal_times(       i_cpl_put,n),n=nfpr,nlpr)
++          WRITE   (nutiming, '(A,8F10.2)') ytable(    i_cpl_vert_interp)(1:22),&
++                  (ztotal_times(i_cpl_vert_interp,n),n=nfpr,nlpr)
++          WRITE   (nutiming, '(A,8F10.2)') ytable(       i_cpl_add_comp)(1:22),&
++                  (ztotal_times(  i_cpl_add_comp,n),n=nfpr,nlpr)
++          WRITE   (nutiming, '(A,8F10.2)') ytable(           i_cpl_grad)(1:22),&
++                  (ztotal_times(      i_cpl_grad,n),n=nfpr,nlpr)
++#endif
++       
+           WRITE   (nutiming, '(A)')  '  '
+@@ -1179,3 +1223,27 @@
+         ENDIF
+-
++#ifdef OASIS_IOW_ESM
++        WRITE (nutiming, '(A)')  '  '
++        ntab = i_oasis_cpl
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab), &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++        ntab = i_cpl_define
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab), &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++        ntab = i_cpl_get
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab), &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++        ntab = i_cpl_put
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab),  &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++        ntab = i_cpl_vert_interp
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab),  &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++        ntab = i_cpl_add_comp
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab),  &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++        ntab = i_cpl_grad
++        WRITE (nutiming, '(A,8F11.2)') ytable(ntab)(1:22), zavgtime(1,ntab), &
++                zavgtime(2,ntab), zavgtime(3,ntab), zavgtime(4,ntab)
++#endif
++!UOI 22.05.13 end
+         WRITE (nutiming, '(A)')  '  '
+diff --unidirectional-new-file -r -U 1 cclm-sp_2.0/src/cclm/src/.vscode/tasks.json cclm/src/.vscode/tasks.json
+--- cclm-sp_2.0/src/cclm/src/.vscode/tasks.json	1970-01-01 01:00:00.000000000 +0100
++++ cclm/src/.vscode/tasks.json	2023-07-25 16:08:58.336836300 +0200
+@@ -0,0 +1,123 @@
++{
++    // See https://go.microsoft.com/fwlink/?LinkId=733558
++    // for the documentation about the tasks.json format
++    "version": "2.0.0",
++    "tasks": [
++        {
++            "label": "build_cclm_berlin",
++            "type": "shell",
++            "command": "cd /media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/CCLM/cclm; rsync -r -i -u src mvkradtk@blogin:/scratch/usr/mvkradtk/IOW_ESM/components/CCLM/cclm/.; ssh -t mvkradtk@blogin 'cd /scratch/usr/mvkradtk/IOW_ESM/components/CCLM/; source build_fast.sh'",
++            "group": "build",
++            "presentation": {
++                "reveal": "always",
++                "panel": "new"
++            },
++            "problemMatcher": {
++                "owner": "ifort",
++                "fileLocation": [
++                    "relative",
++                    "${workspaceRoot}"
++                ],
++                "pattern": {
++                    "regexp": "^/scratch/usr/mvkradtk/IOW_ESM/components/CCLM/cclm/src/(.*?)\\((.*?)\\): (warning|error) (.*)",
++                    "file": 1,
++                    "line": 2,
++                    "severity": 3,
++                    "message": 4
++                }
++            }
++        },
++        {
++            "label": "build_cclm_haumea",
++            "type": "shell",
++            "command": "cd ${workspaceRoot}/../../; ./build.sh haumea",
++            "group": {
++                "kind": "build",
++                "isDefault": true
++            },
++            "presentation": {
++                "reveal": "always",
++                "panel": "new"
++            },
++            "problemMatcher": {
++                "owner": "ifort",
++                "fileLocation": [
++                    "relative",
++                    "${workspaceRoot}"
++                ],
++                "pattern": {
++                    "regexp": "^/data/sk1480/IOW_ESM/components/CCLM/cclm/src/(.*?)\\((.*?)\\): (warning|error) (.*)",
++                    "file": 1,
++                    "line": 2,
++                    "severity": 3,
++                    "message": 4
++                }
++            }
++        },
++        {
++            "label": "build_cclm_phy-2",
++            "type": "shell",
++            "command": "cd /media/d/IOW_ESM/components/CCLM/cclm; rsync -r -i -u src karsten@phy-2:/silod7/karsten/IOW_ESM/components/CCLM/cclm/.; ssh -t karsten@phy-2 'cd /silod7/karsten/IOW_ESM/components/CCLM/; source build.sh '",
++            "group": {
++                "kind": "build",
++                "isDefault": true
++            },
++            "presentation": {
++                "reveal": "always",
++                "panel": "new"
++            },
++            "problemMatcher": {
++                "owner": "ifort",
++                "fileLocation": [
++                    "relative",
++                    "${workspaceRoot}"
++                ],
++                "pattern": {
++                    "regexp": "^/silod7/karsten/IOW_ESM/components/CCLM/cclm/src/(.*?)\\((.*?)\\): (warning|error) (.*)",
++                    "file": 1,
++                    "line": 2,
++                    "severity": 3,
++                    "message": 4
++                }
++            }
++        },
++        {
++            "label": "build_cclm_debug",
++            "type": "shell",
++            "command": "cd /media/d/hagen/iow/climate/coupled_model/IOW_ESM/components/CCLM/cclm; rsync -r -i -u src mvkradtk@blogin:/scratch/usr/mvkradtk/IOW_ESM/components/CCLM/cclm/.; ssh -t mvkradtk@blogin 'cd /scratch/usr/mvkradtk/IOW_ESM/components/CCLM/; source build_debug_fast.sh'",
++            "group": "build",
++            "presentation": {
++                "reveal": "always",
++                "panel": "new"
++            },
++            "problemMatcher": {
++                "owner": "ifort",
++                "fileLocation": [
++                    "relative",
++                    "${workspaceRoot}"
++                ],
++                "pattern": {
++                    "regexp": "^/scratch/usr/mvkradtk/IOW_ESM/components/CCLM/cclm/src/(.*?)\\((.*?)\\): (warning|error) (.*)",
++                    "file": 1,
++                    "line": 2,
++                    "severity": 3,
++                    "message": 4
++                }
++            }
++        },
++        {
++            "label": "run_IOW_ESM_haumea",
++            "type": "shell",
++            "command": "cd ${workspaceRoot}/../../../../; ./run.sh haumea",
++            "group": {
++                "kind": "test",
++                "isDefault": true
++            },
++            "presentation": {
++                "reveal": "always",
++                "panel": "new"
++            },
++            "problemMatcher": []
++        }
++    ]
++}
+\ No newline at end of file
+Only in cclm-sp_2.0/src/cclm: VERSION
+Only in cclm-sp_2.0/src/cclm: work

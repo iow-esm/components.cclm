@@ -1,0 +1,8 @@
+*.mod
+chain/
+data/
+int2lm/
+run/
+utils/
+cclm/bin_PRODUCTION/
+cclm/obj_PRODUCTION/
